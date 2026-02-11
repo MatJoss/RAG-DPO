@@ -1,0 +1,52 @@
+﻿# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Virtual environment
+venv/
+env/
+ENV/
+
+# Data (large files - regenerated via pipeline)
+data/raw/*
+data/metadata/*
+data/backup/*
+data/archive/*
+data/keep/*
+data/debug_json_errors/*
+data/vectordb/*
+!data/raw/.gitkeep
+!data/vectordb/.gitkeep
+
+# Models & caches (downloaded at runtime)
+models/*
+vectordb/*
+cache/*
+logs/*
+!models/.gitkeep
+!vectordb/.gitkeep
+!cache/.gitkeep
+!logs/.gitkeep
+
+# Environment secrets
+.env
+.env.local
+.streamlit/secrets.toml
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Build artifacts
+*.egg-info/
+dist/
+build/

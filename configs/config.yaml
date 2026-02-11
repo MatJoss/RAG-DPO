@@ -1,0 +1,65 @@
+# Configuration principale
+scraping:
+  base_url: "https://www.cnil.fr/fr/professionnel"
+  allowed_domains:
+    - "www.cnil.fr"
+  file_types:
+    - html
+    - pdf
+    - odt
+    - xlsx
+    - docx
+  max_depth: 5
+  respect_robots_txt: true
+
+processing:
+  chunk_size: 512
+  chunk_overlap: 128
+  min_chunk_size: 100
+  languages:
+    - fr
+
+embeddings:
+  model_local: "nomic-embed-text"  # Via Ollama, 768 dimensions
+  model_hybrid: "mistral-embed"
+  
+llm:
+  local:
+    model: "mistral-nemo"  # 12B, excellent FR, 128K context
+    temperature: 0.0       # Factuel strict
+    max_tokens: 4096
+  hybrid:
+    provider: "mistral"
+    model: "mistral-small-latest"
+    temperature: 0.1
+    max_tokens: 4096
+
+rag:
+  # Retrieval
+  n_documents: 5
+  n_chunks_per_doc: 3
+  max_context_length: 32000   # ~8000 tokens
+
+  # Recherche hybride
+  enable_hybrid: true           # BM25 sparse + semantic dense + RRF
+  enable_summary_prefilter: true
+  summary_prefilter_k: 40      # Top-N documents du pré-filtre (augmenté: les bons docs étaient hors top-20)
+
+  # Query expansion (multi-query retrieval)
+  enable_query_expansion: true  # LLM reformule la question en 3 variantes
+  query_expansion_n: 3          # Nombre de reformulations
+  query_expansion_temperature: 0.7  # Diversité des reformulations
+
+  # Cross-encoder reranking
+  enable_reranker: true
+  reranker_model: "jinaai/jina-reranker-v2-base-multilingual"  # 278M, MIRACL FR 54.83, 7× plus rapide que BGE
+  reranker_device: "cpu"        # CPU pour ne pas toucher au VRAM
+  rerank_candidates: 40         # Candidats bruts (semantic+BM25) passés au reranker AVANT dédup document
+  rerank_top_k: 10              # Chunks gardés après reranking
+
+  # Validation
+  enable_validation: true
+  relevance_threshold: 0.80      # Calibré pour bge-reranker-v2-m3 (scores 0-1, pertinent ~0.2-0.8)
+  
+  # Génération
+  temperature: 0.0              # Factuel strict

@@ -1,5 +1,7 @@
 # 🔒 RAG-DPO — Assistant RGPD pour DPO
 
+> 🇬🇧 [English version](README.en.md)
+
 > Système RAG (Retrieval-Augmented Generation) 100% local pour assister les Délégués à la Protection des Données, basé sur les sources officielles CNIL.
 
 <!-- Captures à ajouter -->

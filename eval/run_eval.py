@@ -594,11 +594,13 @@ def evaluate_single(qa_item: Dict, answer: str, sources: List[Dict] = None, use_
     }
     
     # Score global pondéré
-    # Answer Correctness : 45%, Faithfulness : 25%, Conciseness : 10%, Sources : 20%
+    # Answer Correctness : 55%, Faithfulness : 25%, Sources : 20%
+    # Conciseness désactivée : mesurer la brièveté n'est pas un critère de qualité
+    # en contexte juridique DPO. On garde le calcul pour traçabilité uniquement.
     result["global_score"] = round(
-        0.45 * combined_correctness +
+        0.55 * combined_correctness +
         0.25 * not_include_score +
-        0.10 * concise_score +
+        0.00 * concise_score +
         0.20 * source_score,
         2
     )
@@ -990,10 +992,10 @@ def run_evaluation(
             "n_errors": len(results) - len(valid_results),
             "avg_global_score": round(avg_global, 3) if valid_results else 0,
             "avg_time_per_question": round(avg_time, 1) if valid_results else 0,
-            "scoring_version": "v3_semantic",
-            "scoring_weights": {"correctness": 0.45, "faithfulness": 0.25, "conciseness": 0.10, "sources": 0.20},
+            "scoring_version": "v4_no_conciseness",
+            "scoring_weights": {"correctness": 0.55, "faithfulness": 0.25, "conciseness": 0.00, "sources": 0.20},
             "correctness_formula": "0.50*llm_judge + 0.35*semantic_sim + 0.15*keyword",
-            "conciseness_mode": "intent_aware",
+            "conciseness_mode": "disabled (traced only)",
             "results": results,
         }, f, ensure_ascii=False, indent=2)
     

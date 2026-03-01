@@ -142,9 +142,11 @@
 
 ## PowerShell : JAMAIS de f-strings ou quotes imbriquées dans `python -c`
 - **Erreur récurrente** : les f-strings avec `{result["key"]}` ou les quotes simples/doubles imbriquées plantent systématiquement dans PowerShell
-- **Règle** : dès qu'un snippet Python fait plus de 2 lignes OU contient des quotes imbriquées → créer un script temporaire dans `tasks/`
+- **Erreur récurrente (bis)** : même les f-strings avec format specs (ex: `f"{val:<35}"`, `f"{score:>8.2f}"`) crashent PowerShell car les `<` et `>` sont interprétés comme des redirections
+- **Règle** : dès qu'un snippet Python fait plus de 2 lignes OU contient des f-strings → créer un script temporaire dans `tasks/`
 - **Règle** : une fois le script exécuté avec succès, le SUPPRIMER immédiatement (pas de scripts one-shot qui traînent)
 - **Pattern** : `create_file → run → delete` en 3 étapes, jamais de python -c multi-lignes dans PowerShell
+- **Anti-pattern** : ne JAMAIS essayer d'échapper les f-strings pour PowerShell, ça ne marche pas. Toujours un fichier.
 
 ## Dépendances : TOUJOURS à jour, TOUJOURS adresser les warnings
 - **Règle** : les security warnings et deprecation notices ne sont PAS optionnels — les traiter immédiatement

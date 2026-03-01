@@ -16,6 +16,9 @@
 | **5b** | 🔄 Init & Update CNIL (routine mensuelle) | 1j | ✅ Done |
 | **6** | 🧠 Intent-Aware Pipeline (assistant structuré) | 2-3j | ✅ Done |
 | **6b** | 🤖 Pipeline Agent LangGraph | 1-2j | ✅ Done |
+| **6c** | 📊 Eval v2 — Semantic Similarity + Conciseness intent-aware | 0.5j | 🔨 En cours |
+| **6d** | 🔧 Tuning prompts intent (régressions q16/q02/q17) | 0.5j | 🔲 |
+| **6e** | 🧠 Multi-turn memory agent | 1-2j | 🔲 |
 | **7** | 🕸️ Graph RAG (LightRAG) | 2 sem | 🔲 v2 |
 
 ---

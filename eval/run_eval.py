@@ -19,6 +19,7 @@ import time
 import re
 import argparse
 import logging
+import numpy as np
 from pathlib import Path
 from datetime import datetime
 from typing import Dict, List, Optional, Tuple
@@ -252,14 +253,15 @@ def score_must_not_include(answer: str, must_not_include: List[str]) -> Tuple[fl
     return score, violations
 
 
-def score_conciseness(answer: str, category: str) -> Tuple[float, str]:
+def score_conciseness(answer: str, category: str, intent: str = "factuel") -> Tuple[float, str]:
     """
     Évalue la concision de la réponse.
     
-    Seuils relaxés : la concision est un SIGNAL, pas un couperet.
-    Un RAG avec un meilleur retrieval fournit plus de contexte → le LLM
-    produit naturellement des réponses plus longues et plus complètes.
-    On pénalise seulement la verbosité excessive (>2× l'idéal).
+    Seuils adaptatifs selon l'intent :
+    - Les prompts méthodologiques/organisationnels DEMANDENT des réponses plus longues
+      (étapes, acteurs, livrables) → seuils plus larges
+    - Les questions factuelles doivent rester concises
+    - On ne pénalise PAS un prompt structuré qui produit le format attendu
     
     Returns:
         (score 0-1, assessment)
@@ -276,7 +278,22 @@ def score_conciseness(answer: str, category: str) -> Tuple[float, str]:
         "hors_perimetre": (50, 150, 300),
     }
     
-    ideal, max_soft, max_hard = limits.get(category, (200, 500, 800))
+    # Ajustement intent-aware : les prompts structurés produisent naturellement
+    # des réponses plus longues — ce n'est PAS de la verbosité, c'est le format
+    intent_multiplier = {
+        "factuel": 1.0,
+        "methodologique": 1.6,      # Étapes + acteurs + livrables = ~400-500 mots normal
+        "organisationnel": 1.4,     # Rôles + processus = ~300-400 mots normal
+        "comparaison": 1.3,         # Tableau comparatif
+        "cas_pratique": 1.4,        # Analyse structurée
+        "liste_exhaustive": 1.5,    # Exhaustivité prime sur concision
+    }
+    mult = intent_multiplier.get(intent, 1.0)
+    
+    base_ideal, base_soft, base_hard = limits.get(category, (200, 500, 800))
+    ideal = int(base_ideal * mult)
+    max_soft = int(base_soft * mult)
+    max_hard = int(base_hard * mult)
     
     if word_count <= ideal:
         return 1.0, f"✅ {word_count} mots (idéal ≤{ideal})"
@@ -336,6 +353,51 @@ def score_source_quality(answer: str, category: str = "") -> Tuple[float, Dict]:
         return 1.0, details
     
     return 0.8, details
+
+
+# ═══════════════════════════════════════════════════════════════
+# Semantic Similarity Scoring (BGE-M3)
+# ═══════════════════════════════════════════════════════════════
+
+_semantic_scorer = None  # Initialisé une seule fois
+
+
+def _get_semantic_scorer():
+    """Singleton du modèle d'embedding pour la similarité sémantique."""
+    global _semantic_scorer
+    if _semantic_scorer is None:
+        from src.utils.embedding_provider import EmbeddingProvider
+        _semantic_scorer = EmbeddingProvider(
+            cache_dir=str(project_root / "models" / "huggingface" / "hub"),
+        )
+    return _semantic_scorer
+
+
+def score_semantic_similarity(
+    expected_answer: str,
+    actual_answer: str,
+) -> float:
+    """
+    Calcule la similarité sémantique via BGE-M3 embeddings.
+    
+    Avantage : capture le sens sans dépendre des mots exacts.
+    "responsable de traitement" ≈ "celui qui détermine les finalités" → score élevé.
+    
+    BGE-M3 est déjà normalisé → cosine similarity = dot product.
+    
+    Returns:
+        score 0-1 (cosine similarity)
+    """
+    try:
+        scorer = _get_semantic_scorer()
+        embeddings = scorer.embed([expected_answer, actual_answer])
+        
+        # Dot product (vecteurs déjà normalisés)
+        sim = float(np.dot(embeddings[0], embeddings[1]))
+        return max(0.0, min(1.0, sim))  # Clamp to [0, 1]
+    except Exception as e:
+        logger.warning(f"⚠️  Semantic similarity error: {e}")
+        return -1.0  # Signal fallback
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -444,7 +506,7 @@ def evaluate_single(qa_item: Dict, answer: str, sources: List[Dict] = None, use_
         "difficulty": qa_item["difficulty"],
     }
     
-    # 1. Answer Correctness — Must Include
+    # 1. Answer Correctness — Must Include (keyword garde-fou)
     include_score, found, missing = score_must_include(
         answer, qa_item.get("must_include", []),
         must_include_any=qa_item.get("must_include_any"),
@@ -455,22 +517,47 @@ def evaluate_single(qa_item: Dict, answer: str, sources: List[Dict] = None, use_
         "missing": missing,
     }
     
-    # 1b. LLM Judge — Évaluation sémantique par le LLM
+    # 1b. Semantic Similarity — BGE-M3 cosine (gratuit, local, pas de faux négatif KW)
+    sem_sim_score = -1.0
+    expected_summary = qa_item.get("expected_answer_summary", "")
+    if expected_summary:
+        sem_sim_score = score_semantic_similarity(
+            expected_answer=expected_summary,
+            actual_answer=answer,
+        )
+    result["answer_correctness"]["semantic_similarity"] = round(sem_sim_score, 3) if sem_sim_score >= 0 else None
+    
+    # 1c. LLM Judge — Évaluation sémantique par le LLM
     llm_score = -1.0
     llm_justification = "disabled"
-    if use_llm_judge and qa_item.get("expected_answer_summary"):
+    if use_llm_judge and expected_summary:
         llm_score, llm_justification = llm_judge_correctness(
             question=qa_item["question"],
-            expected_answer=qa_item["expected_answer_summary"],
+            expected_answer=expected_summary,
             actual_answer=answer,
         )
     
-    # Combiner keyword + LLM judge pour le score final de correctness
-    if llm_score >= 0:  # LLM judge a fonctionné
-        # LLM judge 70%, keyword 30% — le LLM comprend les synonymes
+    # Combiner les 3 signaux pour le score final de correctness
+    # LLM judge : compréhension sémantique profonde (meilleur signal)
+    # Semantic Sim : proxy rapide et stable (pas de stochasticité LLM)
+    # Keyword : garde-fou binaire ("non" doit apparaître pour les pièges)
+    if llm_score >= 0 and sem_sim_score >= 0:
+        # Triple signal : LLM 50% + Semantic 35% + Keyword 15%
+        combined_correctness = 0.50 * llm_score + 0.35 * sem_sim_score + 0.15 * include_score
+        result["answer_correctness"]["llm_judge_score"] = round(llm_score, 2)
+        result["answer_correctness"]["llm_justification"] = llm_justification
+        result["answer_correctness"]["keyword_score"] = round(include_score, 2)
+        result["answer_correctness"]["score"] = round(combined_correctness, 2)
+    elif llm_score >= 0:
+        # LLM + keyword (pas de semantic)
         combined_correctness = 0.70 * llm_score + 0.30 * include_score
         result["answer_correctness"]["llm_judge_score"] = round(llm_score, 2)
         result["answer_correctness"]["llm_justification"] = llm_justification
+        result["answer_correctness"]["keyword_score"] = round(include_score, 2)
+        result["answer_correctness"]["score"] = round(combined_correctness, 2)
+    elif sem_sim_score >= 0:
+        # Semantic + keyword (pas de LLM)
+        combined_correctness = 0.65 * sem_sim_score + 0.35 * include_score
         result["answer_correctness"]["keyword_score"] = round(include_score, 2)
         result["answer_correctness"]["score"] = round(combined_correctness, 2)
     else:
@@ -488,13 +575,15 @@ def evaluate_single(qa_item: Dict, answer: str, sources: List[Dict] = None, use_
         "violations": violations,
     }
     
-    # 3. Conciseness
+    # 3. Conciseness — Intent-aware (prompts structurés → seuils plus larges)
+    intent_str = qa_item.get("_intent", "factuel")  # Injecté par le caller si disponible
     concise_score, concise_assessment = score_conciseness(
-        answer, qa_item["category"]
+        answer, qa_item["category"], intent=intent_str
     )
     result["conciseness"] = {
         "score": concise_score,
         "assessment": concise_assessment,
+        "intent_used": intent_str,
     }
     
     # 4. Source Quality
@@ -698,7 +787,17 @@ def run_evaluation(
             answer = response.answer
             sources = response.sources if response.sources else []
             
-            # Évaluer (keyword-only pour l'instant, LLM judge en phase 2)
+            # Injecter l'intent du pipeline pour le scoring conciseness
+            intent_str = "factuel"
+            if hasattr(response, 'intent') and response.intent:
+                intent_obj = response.intent
+                if hasattr(intent_obj, 'intent'):
+                    intent_str = intent_obj.intent
+                elif isinstance(intent_obj, str):
+                    intent_str = intent_obj
+            qa_item["_intent"] = intent_str
+            
+            # Évaluer (semantic sim + keyword, LLM judge en phase 2)
             eval_result = evaluate_single(qa_item, answer, sources, use_llm_judge=False)
             eval_result["elapsed_seconds"] = round(elapsed, 1)
             eval_result["answer_length_words"] = len(answer.split())
@@ -716,12 +815,15 @@ def run_evaluation(
             cc = eval_result["conciseness"]
             sq = eval_result["source_quality"]
             
+            sem_display = f"Sem:{ac.get('semantic_similarity', 0):.0%}" if ac.get('semantic_similarity') else "Sem:N/A"
+            intent_display = f"[{intent_str}]" if intent_str != "factuel" else ""
+            
             print(f"   {icon} Score: {global_score:.0%}  "
-                  f"(Correct[kw]: {ac['score']:.0%} | "
-                  f"Faithful: {ff['score']:.0%} | "
-                  f"Concis: {cc['score']:.0%} | "
-                  f"Sources: {sq['score']:.0%})  "
-                  f"[{elapsed:.1f}s, {eval_result['answer_length_words']}w]")
+                  f"(KW:{ac['score']:.0%} {sem_display} | "
+                  f"Faith:{ff['score']:.0%} | "
+                  f"Conc:{cc['score']:.0%} | "
+                  f"Src:{sq['score']:.0%})  "
+                  f"[{elapsed:.1f}s, {eval_result['answer_length_words']}w] {intent_display}")
             
             if ac["missing"]:
                 print(f"   ⚠️  Manquant (kw): {', '.join(ac['missing'])}")
@@ -778,8 +880,14 @@ def run_evaluation(
             
             if llm_score >= 0:
                 r = results[idx]
-                kw_score = r["answer_correctness"]["score"]
-                combined = round(0.70 * llm_score + 0.30 * kw_score, 2)
+                kw_score = r["answer_correctness"].get("keyword_score", r["answer_correctness"]["score"])
+                sem_score = r["answer_correctness"].get("semantic_similarity")
+                
+                # Triple signal si semantic dispo, sinon dual
+                if sem_score is not None and sem_score >= 0:
+                    combined = round(0.50 * llm_score + 0.35 * sem_score + 0.15 * kw_score, 2)
+                else:
+                    combined = round(0.70 * llm_score + 0.30 * kw_score, 2)
                 
                 r["answer_correctness"]["llm_judge_score"] = round(llm_score, 2)
                 r["answer_correctness"]["llm_justification"] = llm_justification
@@ -796,7 +904,8 @@ def run_evaluation(
                 )
                 
                 icon = "🟢" if r["global_score"] >= 0.8 else "🟡" if r["global_score"] >= 0.5 else "🔴"
-                print(f"{icon} LLM={llm_score:.0%} KW={kw_score:.0%} → {combined:.0%} (global={r['global_score']:.0%})")
+                sem_disp = f" Sem={sem_score:.0%}" if sem_score is not None and sem_score >= 0 else ""
+                print(f"{icon} LLM={llm_score:.0%} KW={kw_score:.0%}{sem_disp} → {combined:.0%} (global={r['global_score']:.0%})")
                 if verbose:
                     print(f"      📝 {llm_justification}")
             else:
@@ -807,6 +916,9 @@ def run_evaluation(
     # Nettoyer les champs internes
     for r in results:
         r.pop("_raw_answer", None)
+    # Nettoyer les _intent injectés dans le dataset
+    for q in dataset:
+        q.pop("_intent", None)
     
     # ═══════════════════════════════════════════════════════════
     # Rapport Final
@@ -878,7 +990,10 @@ def run_evaluation(
             "n_errors": len(results) - len(valid_results),
             "avg_global_score": round(avg_global, 3) if valid_results else 0,
             "avg_time_per_question": round(avg_time, 1) if valid_results else 0,
+            "scoring_version": "v3_semantic",
             "scoring_weights": {"correctness": 0.45, "faithfulness": 0.25, "conciseness": 0.10, "sources": 0.20},
+            "correctness_formula": "0.50*llm_judge + 0.35*semantic_sim + 0.15*keyword",
+            "conciseness_mode": "intent_aware",
             "results": results,
         }, f, ensure_ascii=False, indent=2)
     

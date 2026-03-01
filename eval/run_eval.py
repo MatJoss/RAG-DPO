@@ -12,6 +12,8 @@ Usage :
     python eval/run_eval.py --ids q01 q05 q09   # Questions spécifiques
     python eval/run_eval.py --dry-run            # Affiche les questions sans exécuter
     python eval/run_eval.py --verbose            # Affiche les réponses complètes
+    python eval/run_eval.py --runs 3             # 3 runs → moyenne ± σ (recommandé)
+    python eval/run_eval.py --runs 3 --agent     # Multi-run avec pipeline agent
 """
 import json
 import sys
@@ -19,6 +21,7 @@ import time
 import re
 import argparse
 import logging
+import statistics
 import numpy as np
 from pathlib import Path
 from datetime import datetime
@@ -897,11 +900,11 @@ def run_evaluation(
                 r["answer_correctness"]["keyword_score"] = round(kw_score, 2)
                 r["answer_correctness"]["score"] = combined
                 
-                # Recalculer le score global
+                # Recalculer le score global (v4 : conciseness désactivée)
                 r["global_score"] = round(
-                    0.45 * combined +
+                    0.55 * combined +
                     0.25 * r["faithfulness"]["score"] +
-                    0.10 * r["conciseness"]["score"] +
+                    0.00 * r["conciseness"]["score"] +
                     0.20 * r["source_quality"]["score"],
                     2
                 )
@@ -1014,6 +1017,232 @@ def run_evaluation(
 # CLI
 # ═══════════════════════════════════════════════════════════════
 
+def run_multi_evaluation(
+    n_runs: int,
+    dataset_path: str,
+    question_ids: Optional[List[str]] = None,
+    verbose: bool = False,
+    use_llm_judge: bool = True,
+    embedding_mode: str = "bge-m3",
+    enable_dual_gen: bool = False,
+    use_agent: bool = False,
+) -> Dict:
+    """
+    Exécute N runs d'évaluation et agrège les résultats avec moyenne ± écart-type.
+    
+    Approche scientifiquement correcte : temp=0 ne garantit pas le déterminisme
+    (GPU float arithmetic, batch scheduling CUDA, LLM-as-judge variance).
+    Moyenner sur N runs donne un score robuste et un intervalle de confiance.
+    
+    Args:
+        n_runs: Nombre de runs (≥2)
+        Autres: identiques à run_evaluation
+    
+    Returns:
+        Dict avec scores moyens, écart-types, et détails par run
+    """
+    print(f"\n{'='*70}")
+    print(f"🔄 MULTI-RUN EVALUATION — {n_runs} runs")
+    print(f"{'='*70}\n")
+    
+    all_runs = []       # Liste de dicts retournés par run_evaluation
+    all_results = []    # Liste de listes de résultats par question
+    run_output_paths = []
+    total_start = time.time()
+    
+    for run_idx in range(n_runs):
+        print(f"\n{'━'*70}")
+        print(f"  🔁 RUN {run_idx + 1}/{n_runs}")
+        print(f"{'━'*70}")
+        
+        result = run_evaluation(
+            dataset_path=dataset_path,
+            question_ids=question_ids,
+            dry_run=False,
+            verbose=verbose if run_idx == 0 else False,  # Verbose seulement au 1er run
+            use_llm_judge=use_llm_judge,
+            embedding_mode=embedding_mode,
+            enable_dual_gen=enable_dual_gen,
+            use_agent=use_agent,
+        )
+        
+        all_runs.append(result)
+        all_results.append(result.get("results", []))
+        if result.get("output_path"):
+            run_output_paths.append(result["output_path"])
+    
+    total_elapsed = time.time() - total_start
+    
+    # ═══════════════════════════════════════════════════════════
+    # Agrégation : moyenne ± σ par question et global
+    # ═══════════════════════════════════════════════════════════
+    
+    # Collecter les scores par question
+    qid_scores = {}  # qid → {"global": [s1, s2, ...], "correctness": [...], ...}
+    
+    for run_results in all_results:
+        for r in run_results:
+            if "error" in r:
+                continue
+            qid = r.get("id", "?")
+            if qid not in qid_scores:
+                qid_scores[qid] = {
+                    "global": [], "correctness": [], "faithfulness": [],
+                    "sources": [], "conciseness": [], "words": [],
+                    "time": [], "llm_judge": [], "semantic_sim": [], "keyword": [],
+                    "question": r.get("question", ""),
+                    "category": r.get("category", ""),
+                }
+            s = qid_scores[qid]
+            s["global"].append(r.get("global_score", 0))
+            s["correctness"].append(r.get("answer_correctness", {}).get("score", 0))
+            s["faithfulness"].append(r.get("faithfulness", {}).get("score", 0))
+            s["sources"].append(r.get("source_quality", {}).get("score", 0))
+            s["conciseness"].append(r.get("conciseness", {}).get("score", 0))
+            s["words"].append(r.get("answer_length_words", 0))
+            s["time"].append(r.get("elapsed_seconds", 0))
+            s["llm_judge"].append(r.get("answer_correctness", {}).get("llm_judge_score", 0))
+            s["semantic_sim"].append(r.get("answer_correctness", {}).get("semantic_similarity", 0))
+            s["keyword"].append(r.get("answer_correctness", {}).get("keyword_score", 0))
+    
+    # Scores globaux agrégés
+    all_globals = [r.get("avg_global", 0) for r in all_runs]
+    mean_global = statistics.mean(all_globals)
+    std_global = statistics.stdev(all_globals) if len(all_globals) >= 2 else 0
+    
+    # ═══════════════════════════════════════════════════════════
+    # Rapport Multi-Run
+    # ═══════════════════════════════════════════════════════════
+    
+    print(f"\n{'='*70}")
+    print(f"📊 RAPPORT MULTI-RUN — {n_runs} runs")
+    print(f"{'='*70}\n")
+    
+    print(f"  📈 Score Global : {mean_global:.1%} ± {std_global:.1%}")
+    print(f"  ⏱️  Temps total  : {total_elapsed:.0f}s ({total_elapsed/60:.1f} min)")
+    print(f"  🔁 Runs         : {', '.join(f'{g:.1%}' for g in all_globals)}")
+    
+    # Tableau par question
+    print(f"\n  {'Question':<35} {'Moyenne':>8} {'±σ':>6} {'Min':>6} {'Max':>6} {'Spread':>7} {'Mots':>10}")
+    print(f"  {'-'*35} {'-'*8} {'-'*6} {'-'*6} {'-'*6} {'-'*7} {'-'*10}")
+    
+    high_variance_questions = []
+    
+    for qid in sorted(qid_scores.keys()):
+        s = qid_scores[qid]
+        g = s["global"]
+        
+        if len(g) < 2:
+            continue
+        
+        m = statistics.mean(g)
+        sd = statistics.stdev(g)
+        mn = min(g)
+        mx = max(g)
+        spread = mx - mn
+        
+        w = s["words"]
+        w_mean = statistics.mean(w)
+        w_sd = statistics.stdev(w) if len(w) >= 2 else 0
+        
+        # Flag variance haute
+        flag = ""
+        if spread >= 0.10:
+            flag = " ⚠️"
+            high_variance_questions.append((qid, m, sd, spread, w_mean, w_sd))
+        
+        short = qid[:33] + ".." if len(qid) > 35 else qid
+        print(f"  {short:<35} {m:>7.1%} {sd:>5.1%} {mn:>5.0%} {mx:>5.0%} {spread:>6.0%} {w_mean:>5.0f}±{w_sd:>3.0f}w{flag}")
+    
+    # Résumé variance
+    all_spreads = [max(s["global"]) - min(s["global"]) for s in qid_scores.values() if len(s["global"]) >= 2]
+    avg_spread = statistics.mean(all_spreads) if all_spreads else 0
+    max_spread = max(all_spreads) if all_spreads else 0
+    
+    print(f"\n  📉 Variance inter-runs :")
+    print(f"     Spread moyen  : {avg_spread:.1%} (écart min-max par question)")
+    print(f"     Spread max    : {max_spread:.1%}")
+    print(f"     σ global      : {std_global:.1%}")
+    
+    if high_variance_questions:
+        print(f"\n  ⚠️  {len(high_variance_questions)} question(s) avec spread ≥10% :")
+        for qid, m, sd, spread, w_mean, w_sd in high_variance_questions:
+            print(f"     • {qid}: {m:.0%} ± {sd:.0%} (spread {spread:.0%}, {w_mean:.0f}±{w_sd:.0f} mots)")
+    else:
+        print(f"\n  ✅ Aucune question avec spread ≥10% — résultats stables")
+    
+    # Conclusion
+    print(f"\n  {'─'*60}")
+    if std_global < 0.01:
+        print(f"  ✅ Résultats TRÈS STABLES (σ < 1%) — 1 run suffirait")
+    elif std_global < 0.02:
+        print(f"  ✅ Résultats STABLES (σ < 2%) — fiable pour comparaisons")
+    elif std_global < 0.05:
+        print(f"  ⚠️  Variance MODÉRÉE (σ = {std_global:.1%}) — moyenner 3+ runs pour comparer")
+    else:
+        print(f"  🔴 Variance ÉLEVÉE (σ = {std_global:.1%}) — résultats non fiables sans 5+ runs")
+    
+    # Sauvegarder le rapport agrégé
+    emb_suffix = "nomic" if embedding_mode == "nomic" else "bge-m3"
+    gen_suffix = "single" if not enable_dual_gen else "dual"
+    agent_suffix = "_agent" if use_agent else ""
+    output_path = project_root / "eval" / f"results_{emb_suffix}_{gen_suffix}{agent_suffix}_{n_runs}runs_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+    
+    # Construire résultats agrégés par question
+    aggregated_results = []
+    for qid in sorted(qid_scores.keys()):
+        s = qid_scores[qid]
+        g = s["global"]
+        entry = {
+            "id": qid,
+            "question": s["question"],
+            "category": s["category"],
+            "n_runs": len(g),
+            "global_score": {"mean": round(statistics.mean(g), 3), "std": round(statistics.stdev(g), 3) if len(g) >= 2 else 0, "min": round(min(g), 3), "max": round(max(g), 3), "runs": [round(x, 3) for x in g]},
+            "correctness":  {"mean": round(statistics.mean(s["correctness"]), 3), "std": round(statistics.stdev(s["correctness"]), 3) if len(s["correctness"]) >= 2 else 0, "runs": [round(x, 3) for x in s["correctness"]]},
+            "faithfulness":  {"mean": round(statistics.mean(s["faithfulness"]), 3), "std": round(statistics.stdev(s["faithfulness"]), 3) if len(s["faithfulness"]) >= 2 else 0, "runs": [round(x, 3) for x in s["faithfulness"]]},
+            "sources":       {"mean": round(statistics.mean(s["sources"]), 3), "std": round(statistics.stdev(s["sources"]), 3) if len(s["sources"]) >= 2 else 0, "runs": [round(x, 3) for x in s["sources"]]},
+            "llm_judge":     {"mean": round(statistics.mean(s["llm_judge"]), 3), "std": round(statistics.stdev(s["llm_judge"]), 3) if len(s["llm_judge"]) >= 2 else 0, "runs": [round(x, 3) for x in s["llm_judge"]]},
+            "semantic_sim":  {"mean": round(statistics.mean(s["semantic_sim"]), 3), "std": round(statistics.stdev(s["semantic_sim"]), 3) if len(s["semantic_sim"]) >= 2 else 0, "runs": [round(x, 3) for x in s["semantic_sim"]]},
+            "keyword":       {"mean": round(statistics.mean(s["keyword"]), 3), "std": round(statistics.stdev(s["keyword"]), 3) if len(s["keyword"]) >= 2 else 0, "runs": [round(x, 3) for x in s["keyword"]]},
+            "answer_length_words": {"mean": round(statistics.mean(s["words"]), 0), "std": round(statistics.stdev(s["words"]), 0) if len(s["words"]) >= 2 else 0, "runs": [int(x) for x in s["words"]]},
+        }
+        aggregated_results.append(entry)
+    
+    with open(output_path, "w", encoding="utf-8") as f:
+        json.dump({
+            "type": "multi_run_aggregated",
+            "timestamp": datetime.now().isoformat(),
+            "n_runs": n_runs,
+            "embedding_model": "BGE-M3" if embedding_mode == "bge-m3" else "nomic-embed-text",
+            "embedding_mode": embedding_mode,
+            "generation_mode": "single" if not enable_dual_gen else "dual",
+            "pipeline_mode": "agent" if use_agent else "native",
+            "scoring_version": "v4_no_conciseness",
+            "global_score": {"mean": round(mean_global, 3), "std": round(std_global, 3), "runs": [round(x, 3) for x in all_globals]},
+            "variance_analysis": {
+                "avg_spread_per_question": round(avg_spread, 3),
+                "max_spread": round(max_spread, 3),
+                "high_variance_questions": [q[0] for q in high_variance_questions],
+            },
+            "total_time_seconds": round(total_elapsed, 0),
+            "individual_run_files": run_output_paths,
+            "results": aggregated_results,
+        }, f, ensure_ascii=False, indent=2)
+    
+    print(f"\n💾 Rapport agrégé : {output_path}")
+    for i, p in enumerate(run_output_paths, 1):
+        print(f"   Run {i}: {p}")
+    print(f"{'='*70}\n")
+    
+    return {
+        "mean_global": mean_global,
+        "std_global": std_global,
+        "n_runs": n_runs,
+        "output_path": str(output_path),
+    }
+
+
 def main():
     parser = argparse.ArgumentParser(description="Évaluation automatique du RAG-DPO")
     parser.add_argument("--ids", nargs="+", help="IDs des questions à évaluer (ex: q01 q05)")
@@ -1027,6 +1256,8 @@ def main():
                         help="Active la dual-generation (single-gen par défaut, dual plus lent)")
     parser.add_argument("--agent", action="store_true",
                         help="Utilise le pipeline LangGraph agent au lieu du natif")
+    parser.add_argument("--runs", type=int, default=1,
+                        help="Nombre de runs à exécuter et moyenner (défaut: 1, recommandé: 3)")
     
     args = parser.parse_args()
     
@@ -1036,16 +1267,28 @@ def main():
         print(f"❌ Dataset introuvable : {dataset_path}")
         sys.exit(1)
     
-    run_evaluation(
-        dataset_path=dataset_path,
-        question_ids=args.ids,
-        dry_run=args.dry_run,
-        verbose=args.verbose,
-        use_llm_judge=not args.no_llm_judge,
-        embedding_mode=args.embedding,
-        enable_dual_gen=args.dual,
-        use_agent=args.agent,
-    )
+    if args.runs >= 2:
+        run_multi_evaluation(
+            n_runs=args.runs,
+            dataset_path=dataset_path,
+            question_ids=args.ids,
+            verbose=args.verbose,
+            use_llm_judge=not args.no_llm_judge,
+            embedding_mode=args.embedding,
+            enable_dual_gen=args.dual,
+            use_agent=args.agent,
+        )
+    else:
+        run_evaluation(
+            dataset_path=dataset_path,
+            question_ids=args.ids,
+            dry_run=args.dry_run,
+            verbose=args.verbose,
+            use_llm_judge=not args.no_llm_judge,
+            embedding_mode=args.embedding,
+            enable_dual_gen=args.dual,
+            use_agent=args.agent,
+        )
 
 
 if __name__ == "__main__":

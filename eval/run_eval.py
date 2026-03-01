@@ -287,6 +287,7 @@ def score_conciseness(answer: str, category: str, intent: str = "factuel") -> Tu
         "comparaison": 1.3,         # Tableau comparatif
         "cas_pratique": 1.4,        # Analyse structurée
         "liste_exhaustive": 1.5,    # Exhaustivité prime sur concision
+        "refus": 0.3,              # Réponse très courte attendue (1-3 phrases)
     }
     mult = intent_multiplier.get(intent, 1.0)
     

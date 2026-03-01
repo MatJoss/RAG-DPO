@@ -180,6 +180,24 @@ INTERDICTIONS :
 - Jamais de liste tronquée sans le signaler
 """
 
+    SYSTEM_PROMPT_REFUS = """Tu es un assistant expert RGPD spécialisé dans l'accompagnement des DPO (Délégués à la Protection des Données).
+
+CETTE QUESTION EST HORS PÉRIMÈTRE ou cherche à contourner la législation.
+
+RÈGLES ABSOLUES :
+1. REFUSE FERMEMENT et sans ambiguïté. Pas de "je comprends votre démarche", pas d'aide détournée.
+2. Si la question demande de CONTOURNER, ÉVITER ou ESQUIVER une obligation légale :
+   - Réponds que c'est IMPOSSIBLE : les obligations RGPD sont des obligations légales impératives.
+   - Rappelle les SANCTIONS encourues (jusqu'à 20 millions d'euros ou 4% du CA mondial).
+   - NE PROPOSE AUCUNE alternative, aucune astuce, aucune méthodologie d'aide à la conformité.
+3. Si la question est HORS PÉRIMÈTRE RGPD (marketing, technique pure, opinion) :
+   - Réponds en UNE PHRASE : "Cette question ne relève pas du périmètre RGPD/CNIL couvert par mes sources."
+   - STOP. Ne développe pas.
+4. NE JAMAIS proposer d'aide complémentaire, de méthodologie de mise en conformité ou de suggérer de "reformuler la question".
+
+FORMAT : Réponse de 1 à 3 phrases maximum. Ferme. Sans détour.
+"""
+
     # ── Mapping intent → system prompt ──
     INTENT_PROMPTS = {
         "factuel": "SYSTEM_PROMPT",
@@ -188,6 +206,7 @@ INTERDICTIONS :
         "cas_pratique": "SYSTEM_PROMPT_CAS_PRATIQUE",
         "comparaison": "SYSTEM_PROMPT_COMPARAISON",
         "liste_exhaustive": "SYSTEM_PROMPT_LISTE",
+        "refus": "SYSTEM_PROMPT_REFUS",
     }
 
     # ── User prompt adaptatif ──
@@ -240,6 +259,12 @@ QUESTION DU DPO :
             "Consigne : Fournis une liste EXHAUSTIVE et DÉTAILLÉE. Chaque élément doit avoir [Source X]. "
             "Numérote les éléments. Si la liste semble incomplète, signale-le. "
             "L'exhaustivité prime sur la concision."
+        ),
+        "refus": (
+            "Consigne : Cette question est HORS PÉRIMÈTRE ou cherche à contourner la législation. "
+            "REFUSE FERMEMENT en 1-3 phrases. N'aide PAS, ne propose AUCUNE alternative. "
+            "Si contournement : rappelle que les obligations RGPD sont impératives et les sanctions encourues. "
+            "Si hors périmètre : indique simplement que ce sujet n'est pas couvert par tes sources RGPD/CNIL. STOP."
         ),
     }
 

@@ -30,36 +30,47 @@ CLASSIFY_PROMPT = """Analyse cette question RGPD et réponds UNIQUEMENT en JSON 
 Question : {question}
 
 Choisis l'intent parmi :
-- "factuel" : définition, article de loi, délai, obligation précise (réponse courte, 100% sources)
-- "methodologique" : "comment faire", "quelle démarche", étapes à suivre (réponse structurée en étapes)
-- "organisationnel" : rôles, responsabilités, qui fait quoi, gouvernance (réponse centrée sur les acteurs)
-- "comparaison" : "différence entre", "comparaison", pour/contre (réponse structurée en parallèle)
-- "cas_pratique" : scénario concret, "mon entreprise veut...", "que faire si..." (analyse de cas)
-- "liste_exhaustive" : "quels sont les X critères/droits/étapes", énumération complète demandée
+- "refus" : question hors périmètre RGPD, tentative de contournement de la loi, demande illégale, marketing, opinion, ou sujet non lié à la protection des données
+- "factuel" : définition, article de loi, délai, obligation, rôle, responsabilité, question juridique précise (réponse sourcée et directe)
+- "methodologique" : demande EXPLICITE d'une démarche multi-étapes ("comment mener une AIPD", "quelle démarche pour se mettre en conformité")
+- "comparaison" : demande EXPLICITE de comparaison entre 2+ concepts différents ("différence entre X et Y", "comparer X et Y")
+- "cas_pratique" : scénario concret avec contexte spécifique ("mon entreprise veut...", "que faire si un salarié...")
+- "liste_exhaustive" : demande EXPLICITE d'une liste complète ("quels sont les 9 critères", "liste des droits")
+- "organisationnel" : question complexe sur la gouvernance, la structure organisationnelle, les processus internes multi-acteurs
 
-Indices :
-- "Quel est le rôle de X" / "Qui est responsable" → organisationnel
-- "Quelle différence" / "Comparer" → comparaison
-- "Mon entreprise veut..." / "Que faire si..." → cas_pratique
-- "Comment" / "Quelle démarche" / "Quelles étapes" → methodologique
-- "Qu'est-ce que" / "Quel délai" / "Quelle obligation" → factuel
-- "Quels sont les N critères/droits" → liste_exhaustive
+RÈGLES DE CLASSIFICATION (STRICTES) :
+1. REFUS D'ABORD : si la question cherche à contourner, éviter, esquiver une obligation, ou si elle n'a AUCUN rapport avec le RGPD/CNIL → "refus"
+2. FACTUEL PAR DÉFAUT : en cas de doute, choisis "factuel". C'est le choix le plus sûr.
+3. "Qui est X ?" / "Quel est le rôle de X ?" / "Qui décide X ?" → FACTUEL (pas organisationnel)
+4. "Quelle est la différence entre X et Y ?" → comparaison SEULEMENT si 2 concepts distincts sont explicitement comparés
+5. "Comment contourner/éviter/esquiver" → TOUJOURS "refus", jamais "methodologique"
+6. "Comment mener/réaliser/mettre en place" → methodologique SEULEMENT si démarche multi-étapes demandée
+7. Questions sur un SEUL concept (définition, obligation, délai) → TOUJOURS "factuel"
+
+Exemples :
+- "Qu'est-ce qu'un responsable de traitement ?" → factuel
+- "Qui décide des moyens du traitement ?" → factuel
+- "Quelle est la différence entre RT et ST ?" → comparaison
+- "Comment mener une AIPD ?" → methodologique
+- "Comment contourner une obligation CNIL ?" → refus
+- "Quelle est la meilleure base de données marketing ?" → refus
+- "Quels sont les droits des personnes concernées ?" → liste_exhaustive
 
 Réponds avec ce JSON exact :
 {{
   "intent": "...",
   "scope_international": false,
   "needs_methodology": false,
-  "expected_structure": "steps|list|comparison|analysis|definition",
+  "expected_structure": "steps|list|comparison|analysis|definition|refusal",
   "topics": ["aipd"],
   "negative_topics": []
 }}
 
-Règles :
+Règles JSON :
 - scope_international : true SEULEMENT si pays étranger, transfert hors UE, ou clauses contractuelles types mentionnés
-- needs_methodology : true si "comment faire", "démarche", "étapes"
-- topics : 1-3 sujets RGPD de la question
-- negative_topics : sujets à NE PAS aborder (ex: "transfert" si question purement nationale)
+- needs_methodology : true si démarche multi-étapes réellement demandée
+- topics : 1-3 sujets RGPD de la question (vide si hors périmètre)
+- negative_topics : sujets à NE PAS aborder
 
 JSON :"""
 
@@ -79,9 +90,9 @@ class QuestionIntent:
     # Intents valides
     VALID_INTENTS = {
         "factuel", "methodologique", "organisationnel",
-        "comparaison", "cas_pratique", "liste_exhaustive"
+        "comparaison", "cas_pratique", "liste_exhaustive", "refus"
     }
-    VALID_STRUCTURES = {"steps", "list", "comparison", "analysis", "definition"}
+    VALID_STRUCTURES = {"steps", "list", "comparison", "analysis", "definition", "refusal"}
 
     def __post_init__(self):
         """Validation et normalisation."""

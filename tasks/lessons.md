@@ -186,3 +186,10 @@
 - **Fix** : pour les longs process (benchmarks, indexation), demander à l'utilisateur de lancer manuellement et signaler quand c'est fini
 - **Pattern** : ne JAMAIS utiliser `get_terminal_output` sur un process GPU-intensive en cours — lire le fichier de résultats après coup
 - **Alternative** : pour les process courts (<1 min), `isBackground=false` fonctionne bien
+
+## Environnement Python : UTILISER LE VENV EXISTANT, ne JAMAIS en créer un autre
+- **Erreur récurrente** : l'outil `configure_python_environment` propose de créer un venv en Python 3.14 ou autre version système au lieu d'utiliser le venv existant
+- **Règle ABSOLUE** : le venv du projet est `e:\Projets\RAG-DPO\venv` (Python 3.11.9). Il est DÉJÀ activé dans les terminaux. NE JAMAIS appeler `configure_python_environment` — ça déclenche un dialogue pour créer un nouvel environnement.
+- **Pattern** : pour exécuter du Python, utiliser directement `& e:\Projets\RAG-DPO\venv\Scripts\python.exe` dans le terminal
+- **Pattern** : pour installer des packages, utiliser `& e:\Projets\RAG-DPO\venv\Scripts\pip.exe install <package>`
+- **Anti-pattern** : ne JAMAIS utiliser `configure_python_environment`, `install_python_packages`, ou tout outil qui propose de "configurer" l'environnement Python — le venv existe et fonctionne

@@ -66,15 +66,32 @@ def save_tags_registry(registry: dict):
         json.dump(registry, f, indent=2, ensure_ascii=False)
 
 
-def get_collection():
-    """Récupère la collection ChromaDB."""
-    import chromadb
-    from chromadb.config import Settings
-    client = chromadb.PersistentClient(
-        path=str(CHROMA_PATH),
-        settings=Settings(anonymized_telemetry=False),
+def get_shared_collection():
+    """Récupère la collection ChromaDB partagée depuis le système RAG initialisé par app.py."""
+    if "rag_system" not in st.session_state:
+        # Importer et déclencher l'init partagée
+        sys.path.insert(0, str(project_root))
+        from app import get_rag_system
+        get_rag_system()
+    system = st.session_state.get("rag_system")
+    if system and "collection" in system:
+        return system["collection"]
+    # Fallback si la page est accédée avant l'init (ne devrait pas arriver)
+    raise RuntimeError(
+        "Le système RAG n'est pas encore initialisé. "
+        "Accédez d'abord à la page d'accueil."
     )
-    return client.get_collection(COLLECTION_NAME)
+
+
+def get_shared_embedding_provider():
+    """Récupère l'embedding provider partagé."""
+    system = st.session_state.get("rag_system")
+    if system and "embedding_provider" in system:
+        return system["embedding_provider"]
+    from src.utils.embedding_provider import EmbeddingProvider
+    return EmbeddingProvider(
+        cache_dir=str(project_root / "models" / "huggingface" / "hub"),
+    )
 
 
 def get_enterprise_docs(collection) -> list:
@@ -235,7 +252,7 @@ def main():
         st.subheader("📋 Documents internes indexés")
 
         try:
-            collection = get_collection()
+            collection = get_shared_collection()
             docs = get_enterprise_docs(collection)
             stats = get_collection_stats(collection)
         except Exception as e:
@@ -290,7 +307,7 @@ def main():
         st.subheader("⚙️ Gestion des tags et purge")
 
         try:
-            collection = get_collection()
+            collection = get_shared_collection()
         except Exception as e:
             st.error(f"❌ Erreur accès VectorDB : {e}")
             return
@@ -393,15 +410,12 @@ def _run_ingestion(uploaded_files, tag: str, tag_label: str = ""):
         extract_and_chunk, make_document_id, detect_file_type,
         update_tags_registry,
     )
-    from src.utils.embedding_provider import EmbeddingProvider
 
     progress = st.progress(0, text="Préparation...")
 
     try:
-        collection = get_collection()
-        embedding_provider = EmbeddingProvider(
-            cache_dir=str(project_root / "models" / "huggingface" / "hub"),
-        )
+        collection = get_shared_collection()
+        embedding_provider = get_shared_embedding_provider()
     except Exception as e:
         st.error(f"❌ Erreur init : {e}")
         return

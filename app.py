@@ -88,6 +88,8 @@ def init_rag_system():
 
         return {
             "pipeline": pipeline,
+            "collection": collection,
+            "embedding_provider": embedding_provider,
             "chunk_count": collection.count(),
             "query_logger": query_logger,
             "alerter": alerter,

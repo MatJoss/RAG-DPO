@@ -74,3 +74,42 @@ rag:
   
   # Génération
   temperature: 0.0              # Factuel strict
+
+# ── Observabilité ──────────────────────────────────────────
+observability:
+  logging:
+    level: INFO                    # DEBUG, INFO, WARNING, ERROR
+    structured_file: "app.jsonl"   # JSON structured logs
+    max_size_mb: 20                # Rotation après N MB
+    console: true                  # Logs human-readable en console
+
+  alerting:
+    enabled: true
+    check_interval_minutes: 60     # Fréquence de vérification (en minutes)
+
+    thresholds:
+      error_rate_pct: 20.0         # Alerte si taux d'erreur > N%
+      avg_response_time_s: 60.0    # Alerte si temps moyen > Ns
+      satisfaction_below_pct: 50.0 # Alerte si satisfaction < N%
+      zero_citation_rate_pct: 30.0 # Alerte si taux questions sans citation > N%
+
+    # Configuration SMTP pour alertes email (désactivé par défaut)
+    # Configurez ces champs pour activer les notifications email
+    smtp:
+      enabled: false
+      host: ""                     # Ex: smtp.gmail.com
+      port: 587
+      use_tls: true
+      username: ""                 # Adresse email d'envoi
+      password: ""                 # Mot de passe ou app password
+      from_addr: ""                # Adresse expéditeur
+      to_addrs: []                 # Liste des destinataires
+      # Exemple :
+      # host: "smtp.gmail.com"
+      # port: 587
+      # username: "mon-dpo-bot@gmail.com"
+      # password: "xxxx-xxxx-xxxx-xxxx"
+      # from_addr: "mon-dpo-bot@gmail.com"
+      # to_addrs:
+      #   - "dpo@entreprise.com"
+      #   - "admin@entreprise.com"

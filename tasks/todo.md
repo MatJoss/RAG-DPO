@@ -11,7 +11,7 @@
 | **1** | 🏷️ Metadata scraper (Last-Modified, hash, dates) | 1-2j | ✅ Done |
 | **2** | 🧠 Migration BGE-M3 (remplace nomic + BM25 séparé) | 2-3j | ✅ Done |
 | **3** | 📂 Pipeline ingestion entreprise (incrémental) | 1 sem | 🔨 En cours |
-| **4** | 📊 Observabilité (logs, feedback, dashboard) | 2-3j | 🔲 |
+| **4** | 📊 Observabilité (logs, feedback, dashboard) | 2-3j | ✅ Done |
 | **5** | 🐳 Docker (on package le produit fini) | 2-3j | 🔲 |
 | **6** | 🕸️ Graph RAG (LightRAG) | 2 sem | 🔲 v2 |
 
@@ -131,6 +131,17 @@ Question DPO
 - [x] Grounding Validation (citations sources)
 - [x] Interface Streamlit
 - [x] Évaluation 18 questions : **93% global, 84% correctness, 100% faithfulness**
+
+### v1.2 — Observabilité production-ready (2026-03-01)
+- [x] QueryLogger — log JSONL queries + feedback, rotation, stats analytiques
+- [x] Structured Logger — JSON structured logging (`logs/app.jsonl`) pour tous les modules
+- [x] Alerter — seuils configurables (error rate, temps, satisfaction, citations)
+- [x] Email SMTP — alertes email configurables dans `config.yaml` (désactivé par défaut)
+- [x] Streamlit multipage — page accueil + Chat + Dashboard dédié
+- [x] Dashboard — métriques, queries récentes, feedback, alertes, export JSON
+- [x] Feedback 👍/👎 — boutons inline dans le chat avec log JSONL
+- [x] Config `observability` dans `config.yaml` — logging + alerting + SMTP
+- [x] Tests complets (`tasks/_test_observability.py`) — 3 composants validés
 
 ### v1.1 — Metadata enrichies (2026-03-01)
 - [x] Scraper v2 : capture Last-Modified HTTP, content_hash SHA256, dates page CNIL

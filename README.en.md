@@ -93,7 +93,7 @@ Semantic only                   86% ──────────────�
 │  │       Hybrid Retrieval (×4 queries)     │                        │
 │  │  ┌──────────┐      ┌──────────────────┐ │                        │
 │  │  │ BM25     │      │ ChromaDB Semantic│ │                        │
-│  │  │ (sparse) │      │ (nomic-embed)    │ │                        │
+│  │  │ (sparse) │      │ (BGE-M3, 1024d)  │ │                        │
 │  │  └────┬─────┘      └────────┬─────────┘ │                        │
 │  │       └──────┬──────────────┘           │                        │
 │  │              ▼                          │                        │
@@ -146,24 +146,29 @@ This mechanism solved the system's most persistent problem (q10: *"Can legitimat
 | Component | Technology | Details |
 |---|---|---|
 | **LLM** | Mistral-Nemo 12B | Via Ollama, 128K context, temperature 0.0 |
-| **Embeddings** | nomic-embed-text | Via Ollama, 768 dimensions, cosine |
+| **Embeddings** | BGE-M3 (BAAI) | sentence-transformers, 1024 dims, FP16 GPU |
 | **VectorDB** | ChromaDB | PersistentClient, 14,388 chunks |
 | **Reranker** | Jina Reranker v2 | 278M params, multilingual, CPU |
 | **BM25** | rank_bm25 | Sparse index for hybrid search |
-| **Interface** | Streamlit | Interactive chat with sources |
-| **GPU** | RTX 4070 Ti 12GB | LLM in VRAM, reranker on CPU |
+| **Interface** | Streamlit multipage | Chat + Observability dashboard |
+| **Observability** | JSONL + Alerter | Structured logs, feedback, SMTP alerts |
+| **GPU** | RTX 4070 Ti 12GB | LLM + embeddings in VRAM, reranker on CPU |
 
 ### Project structure
 
 ```
 RAG-DPO/
-├── app.py                      # Streamlit interface (chat)
+├── app.py                      # Streamlit multipage entry point
+├── pages/
+│   ├── 1_💬_Chat.py            # Interactive RAG chat + feedback
+│   └── 2_📊_Dashboard.py       # Observability dashboard (metrics, alerts)
 ├── test_rag.py                 # CLI RAG testing
 ├── check_install.py            # Installation verification
 ├── rebuild_pipeline.py         # Data pipeline rebuild
 ├── requirements.txt            # Python dependencies
 ├── configs/
-│   └── config.yaml             # Centralized configuration
+│   ├── config.yaml             # Centralized config (RAG + observability + SMTP)
+│   └── enterprise_tags.json    # Enterprise tag registry (auto-generated)
 ├── src/
 │   ├── rag/                    # 🧠 RAG core
 │   │   ├── pipeline.py         # Orchestration (dual-gen, stance detection)
@@ -175,6 +180,7 @@ RAG-DPO/
 │   │   ├── generator.py        # LLM generation (Ollama)
 │   │   └── validators.py       # Grounding + relevance validation
 │   ├── processing/             # 📄 Data processing pipeline
+│   │   ├── ingest_enterprise.py        # Enterprise doc ingestion (PDF, DOCX, XLSX…)
 │   │   ├── process_and_chunk.py        # Semantic chunking
 │   │   ├── create_chromadb_index.py    # Vector indexing
 │   │   ├── generate_document_summaries.py  # LLM summary sheets
@@ -185,11 +191,20 @@ RAG-DPO/
 │   │   └── cnil_scraper_final.py
 │   └── utils/
 │       ├── llm_provider.py     # Ollama interface
+│       ├── embedding_provider.py # BGE-M3 provider (FP16, GPU, lazy load)
+│       ├── query_logger.py     # JSONL query & feedback logger
+│       ├── structured_logger.py # JSON structured logging
+│       ├── alerter.py          # Threshold alerts + SMTP
 │       └── acronyms.py         # GDPR acronym expansion
 ├── eval/                       # 📊 Evaluation framework
 │   ├── qa_dataset.json         # 18-question benchmark (5 categories)
 │   ├── run_eval.py             # 2-phase evaluation (keywords + LLM judge)
 │   └── results_*.json          # Historical results
+├── logs/                       # 📝 Structured logs (not versioned)
+│   ├── app.jsonl               # Application JSON logs
+│   ├── queries.jsonl           # Query history
+│   ├── feedback.jsonl          # User feedback 👍/👎
+│   └── alerts.jsonl            # Alert history
 ├── data/                       # 📁 Data (not versioned)
 │   ├── raw/                    # Raw CNIL documents
 │   ├── vectordb/chromadb/      # ChromaDB vector database
@@ -222,8 +237,9 @@ pip install -r requirements.txt
 
 ```bash
 ollama pull mistral-nemo        # LLM 12B (7.1 GB)
-ollama pull nomic-embed-text    # Embeddings (274 MB)
 ```
+
+> **Note**: BGE-M3 embeddings (sentence-transformers) are downloaded automatically on first run.
 
 ### 3. Verify installation
 
@@ -248,10 +264,19 @@ python rebuild_pipeline.py --from 5b  # Resume from chunking
 streamlit run app.py
 ```
 
-Opens an interactive chat in the browser with:
+Opens the multipage application in the browser:
+
+| Page | Description |
+|---|---|
+| 🏠 **Home** | System overview, statistics |
+| 💬 **Chat** | RAG Q&A interface with cited sources and 👍/👎 feedback |
+| 📊 **Dashboard** | Real-time metrics, alerts, feedback, JSON export |
+
+Chat features:
 - Document type filtering (Doctrine, Guide, Sanction, Technical)
-- Configurable search depth
-- Cited sources with links to CNIL documents
+- Enterprise tag filtering (if internal docs imported)
+- Cited sources with [CNIL] / [Internal] distinction
+- User feedback 👍/👎 logged to JSONL
 
 ### Command line
 
@@ -294,22 +319,83 @@ Final score = 70% LLM Judge + 30% Keywords
 | q17 | Best marketing basis 2024? | Out of scope | **85%** | 17.3s |
 | q18 | Bypass CNIL obligation? | Out of scope | **87%** | 15.1s |
 
+## 📂 Enterprise Pipeline
+
+Allows DPOs to feed the RAG with **their own internal documents** (policies, processing records, contracts, DPIAs…) while keeping the CNIL database as the authoritative reference.
+
+```bash
+# Import a folder of enterprise documents
+python -m src.processing.ingest_enterprise --input docs/ --tag internal_policy --recursive
+
+# List indexed enterprise documents
+python -m src.processing.ingest_enterprise --list
+
+# Purge enterprise documents (without affecting the CNIL database)
+python -m src.processing.ingest_enterprise --purge
+```
+
+- **Supported formats**: PDF, DOCX, XLSX, HTML, TXT
+- **Deduplication** via SHA256 hash (re-running = no duplicates)
+- **Tags** per document for UI filtering (e.g., `internal_policy`, `register`, `dpia`)
+- **CNIL always prevails** over enterprise docs in answers
+
+## 📊 Observability
+
+Production-ready monitoring with structured logging, user feedback, and alerting:
+
+| Component | Description |
+|---|---|
+| **Structured logs** | JSON in `logs/app.jsonl` — every query, error, timing |
+| **Query Logger** | `logs/queries.jsonl` — complete question history + metrics |
+| **Feedback** | `logs/feedback.jsonl` — user 👍/👎 with context |
+| **Alerts** | Configurable thresholds (error rate, response time, satisfaction, citations) |
+| **SMTP** | Optional email notifications (config in `config.yaml`) |
+| **Dashboard** | Dedicated Streamlit page with real-time metrics and export |
+
+### SMTP Configuration (optional)
+
+```yaml
+# In configs/config.yaml
+observability:
+  alerting:
+    smtp:
+      enabled: true
+      host: "smtp.gmail.com"
+      port: 587
+      username: "my-bot@gmail.com"
+      password: "xxxx-xxxx-xxxx-xxxx"  # App password
+      to_addrs:
+        - "dpo@company.com"
+```
+
 ## 🔧 Configuration
 
 Configuration is centralized in `configs/config.yaml`. Key parameters:
 
 ```yaml
+embeddings:
+  model: "BAAI/bge-m3"              # 1024 dims, multilingual, FP16 GPU
+  dims: 1024
+  device: "cuda"
+
 rag:
-  # Retrieval
   enable_hybrid: true               # BM25 + semantic
   enable_query_expansion: true       # Multi-query LLM
   enable_reranker: true              # Cross-encoder Jina
   enable_summary_prefilter: true     # Summary pre-filter
   rerank_candidates: 40              # Candidates before reranking
   rerank_top_k: 10                   # Chunks after reranking
-  
-  # Generation
   temperature: 0.0                   # Strict factual
+
+observability:
+  logging:
+    level: INFO
+    structured_file: "app.jsonl"     # JSON structured logs
+  alerting:
+    enabled: true
+    thresholds:
+      error_rate_pct: 20.0
+      avg_response_time_s: 60.0
 ```
 
 ## 📄 License

@@ -50,3 +50,7 @@ Thumbs.db
 *.egg-info/
 dist/
 build/
+
+# Temp task files
+tasks/data/
+tasks/_*.py

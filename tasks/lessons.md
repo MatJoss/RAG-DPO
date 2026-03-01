@@ -1,5 +1,12 @@
 # Lessons Learned
 
+## Troncature embedding ≠ chunking — ne jamais tronquer après un chunker bien conçu
+- **Problème** : `create_chromadb_index.py` tronquait à `[:2500]` chars, et `OllamaProvider.embed()` re-tronquait à `[:2000]`
+- **Impact** : 49.5% des chunks étaient coupés — le chunker faisait un travail propre (overlap 50w, split sémantique, merge tiny) puis on jetait la moitié
+- **Cause** : héritage de nomic-embed-text (contexte 2048 tokens ≈ 2500 chars) jamais nettoyé
+- **Fix** : avec BGE-M3 (8192 tokens ≈ 24K chars), supprimer toute troncature — les chunks max à ~5K chars passent sans problème
+- **Règle** : si le chunker produit des chunks calibrés, ne JAMAIS re-tronquer en aval. Si nécessaire, ajuster le chunker.
+
 ## Python f-string : PAS de backslash dans les expressions {}
 - **Erreur récurrente** : `f'{d["key"]}'` ou `f'{v["error"][:100]}'` → SyntaxError
 - **Règle** : En Python < 3.12, les f-strings **interdisent** les backslashes (quotes échappées, `\n`, etc.) à l'intérieur des `{}`
@@ -21,6 +28,13 @@
 
 ## Scripts diagnostiques : utiliser des fichiers .py, pas des one-liners -c
 - Les one-liners PowerShell avec `python -c` sont fragiles (échappement quotes, backslashes, longueur)
+
+## ChromaDB : pré-filtrage natif > post-filtrage Python pour les metadata
+- **Problème** : stocker des tags comme string CSV `enterprise_tags: "registre,pia"` → ChromaDB ne peut pas filtrer nativement ($contains n'existe pas)
+- **Impact** : post-filtrage Python = slots de retrieval gaspillés, bruit, risque de "aucune source"
+- **Solution** : champs booléens individuels `tag_registre: true`, `tag_pia: true` + filtre `$or` natif ChromaDB
+- **Règle** : si on veut filtrer sur une metadata, s'assurer qu'elle est filtrable nativement par ChromaDB ($eq, $ne, $in). Pas de parsing Python post-hoc.
+- **Pattern** : `{"$or": [{"source": {"$ne": "ENTREPRISE"}}, {"tag_X": true}]}` = CNIL toujours + tags sélectionnés
 - Préférer créer un petit script dans `tasks/` puis l'exécuter
 
 ## Filtre navigation : ne jamais utiliser "long_lines" comme proxy
@@ -120,6 +134,40 @@
   - q09 "2 ans" + "dernier contact" : 0.5% (quasiment absent)
   - q10 "mise en balance" + "sécurité" : 0.5% (extrême dilution)
 
+## Terminal : TOUJOURS utiliser le venv pour les commandes Python
+- **Erreur récurrente** : lancer `python -c "..."` sans activer le venv → Python système (mauvaise version, pas les dépendances)
+- **Règle** : TOUJOURS préfixer avec le chemin du venv : `e:\Projets\RAG-DPO\venv\Scripts\python.exe`
+- **Ou** : activer le venv en premier dans le terminal (`& e:\Projets\RAG-DPO\venv\Scripts\Activate.ps1`)
+- **Pattern** : dès qu'on travaille dans un projet Python avec un venv, c'est le PREMIER réflexe avant toute commande
+
+## PowerShell : JAMAIS de f-strings ou quotes imbriquées dans `python -c`
+- **Erreur récurrente** : les f-strings avec `{result["key"]}` ou les quotes simples/doubles imbriquées plantent systématiquement dans PowerShell
+- **Règle** : dès qu'un snippet Python fait plus de 2 lignes OU contient des quotes imbriquées → créer un script temporaire dans `tasks/`
+- **Règle** : une fois le script exécuté avec succès, le SUPPRIMER immédiatement (pas de scripts one-shot qui traînent)
+- **Pattern** : `create_file → run → delete` en 3 étapes, jamais de python -c multi-lignes dans PowerShell
+
+## Dépendances : TOUJOURS à jour, TOUJOURS adresser les warnings
+- **Règle** : les security warnings et deprecation notices ne sont PAS optionnels — les traiter immédiatement
+- **Exemple** : torch 2.5.1 bloque le chargement de modèles via `torch.load` à cause de CVE-2025-32434 → il FAUT upgrader
+- **Pattern** : avant d'intégrer une nouvelle dépendance, vérifier la compatibilité avec les versions installées
+- **Pattern** : `pip list --outdated` régulièrement, surtout sur torch/transformers/sentence-transformers (breaking changes fréquents)
+- **Règle** : un venv propre = un projet stable. Les dettes techniques sur les dépendances explosent toujours au pire moment
+
+## Fichiers Python : TOUJOURS utf-8, sans exception
+- **Erreur récurrente** : `open("file.json")` sans `encoding="utf-8"` → crash `UnicodeDecodeError` sur Windows (cp1252 par défaut)
+- **Règle** : TOUT `open()` dans ce projet DOIT avoir `encoding="utf-8"` — projet francophone avec accents, émojis, caractères spéciaux partout
+- **Inclut** : scripts de debug, scripts temporaires dans `tasks/`, scripts d'analyse, pas seulement le code principal
+- **Pattern** : `open(path, encoding="utf-8")` — aucune exception, même pour un one-shot
+
+## Monitoring long tasks : NE PAS poll en boucle, estimer la durée upfront
+- **Erreur critique** : pour un benchmark de 18 questions × 15-30s (= 5-9 min total), j'ai fait ~15 appels `get_terminal_output` toutes les 10-30 secondes, consommant 70% du budget tokens juste à logger "ça tourne encore"
+- **Impact** : 2 summarizations forcées sans aucun avancement projet, tokens brûlés pour rien, expérience utilisateur catastrophique
+- **Règle** : quand on connaît la durée estimée (ex: 18×25s = ~7min), faire UN SEUL check après 80% du temps estimé (5-6 min)
+- **Règle** : JAMAIS de boucle poll/log/poll/log — le terminal background TOURNE, pas besoin de le vérifier toutes les 30s
+- **Règle** : si le user dit "ça prend 15-30s par question", calculer le total et attendre. Point.
+- **Pattern** : estimer → attendre → check 1 fois → si pas fini, attendre encore 30-50% du temps → check final
+- **Anti-pattern** : commenter chaque check intermédiaire dans le chat ("Q10 en cours...", "toujours en cours...") = bruit pur
+
 ## Évaluation : questions vagues + must_include rigides = faux négatifs
 - **Symptôme** : q05 demande "les trois critères principaux" (il y en a 9 équivalents), q08 demande "les droits" (sans exhaustivité), q11 attend "contrat de travail" alors que "contrat" suffit en contexte RH
 - **Impact mesuré** : 89% → 93% global rien qu'en fixant l'éval (même réponses LLM)
@@ -128,3 +176,11 @@
 - **Règle** : si une question vague accepte plusieurs réponses correctes, utiliser `must_include_any` au lieu de `must_include` strict
 - **Règle** : toujours mettre des alternates sémantiques pour les concepts qui se reformulent (`obligation légale|fondé sur|base légale`)
 - **Diagnostic rapide** : si le LLM donne une réponse factuelle correcte mais que l'éval dit 0% correctness → le biais est dans l'éval, pas dans le RAG
+
+## Terminal VS Code : get_terminal_output tue les process background
+- **Problème** : appeler `get_terminal_output` sur un terminal background envoie un signal qui cause un `KeyboardInterrupt` dans le process Python
+- **Symptôme** : le benchmark crash systématiquement à Q4 avec `KeyboardInterrupt` dans le reranker Jina (opération GPU longue)
+- **Cause** : l'outil MCP `get_terminal_output` semble envoyer un Ctrl+C ou signal équivalent au terminal quand il récupère la sortie
+- **Fix** : pour les longs process (benchmarks, indexation), demander à l'utilisateur de lancer manuellement et signaler quand c'est fini
+- **Pattern** : ne JAMAIS utiliser `get_terminal_output` sur un process GPU-intensive en cours — lire le fichier de résultats après coup
+- **Alternative** : pour les process courts (<1 min), `isBackground=false` fonctionne bien

@@ -4,6 +4,7 @@ Corrige TOUS les bugs, gestion robuste, métadonnées complètes
 """
 
 import os
+import re
 import time
 import json
 import hashlib
@@ -12,6 +13,7 @@ from pathlib import Path
 from urllib.parse import urljoin, urlparse
 from typing import Set, Dict, List, Optional, Tuple
 from datetime import datetime
+from email.utils import parsedate_to_datetime
 import shutil
 
 import requests
@@ -236,22 +238,54 @@ class CNILScraperFinal:
         
         return 'html'
     
-    def _download_file(self, url: str, retry: int = 0) -> Optional[Tuple[bytes, str]]:
-        """Télécharge avec retry et retourne (content, content_type)"""
+    def _download_file(self, url: str, retry: int = 0, 
+                        if_modified_since: str = None) -> Optional[Tuple[bytes, str, Dict[str, str]]]:
+        """Télécharge avec retry et retourne (content, content_type, http_headers)
+        
+        Args:
+            url: URL à télécharger
+            retry: Numéro du retry courant
+            if_modified_since: Valeur du header If-Modified-Since pour requête conditionnelle.
+                               Si le serveur renvoie 304, retourne None (page non modifiée).
+        
+        Returns:
+            Tuple (content, content_type, headers_dict) ou None si échec/304.
+            headers_dict contient les headers HTTP pertinents pour les metadata.
+        """
         try:
             time.sleep(self.delay)
             
-            response = self.session.get(url, timeout=30, allow_redirects=True)
+            # Headers conditionnels pour le mode update
+            extra_headers = {}
+            if if_modified_since:
+                extra_headers['If-Modified-Since'] = if_modified_since
+            
+            response = self.session.get(url, timeout=30, allow_redirects=True,
+                                        headers=extra_headers)
+            
+            # 304 Not Modified → page inchangée
+            if response.status_code == 304:
+                self.logger.debug(f"⏭️  304 Not Modified : {url}")
+                return None
+            
             response.raise_for_status()
             
             content_type = response.headers.get('Content-Type', '')
-            return response.content, content_type
+            
+            # Capturer les headers pertinents pour les metadata
+            http_headers = {
+                'last_modified': response.headers.get('Last-Modified', ''),
+                'etag': response.headers.get('ETag', ''),
+                'content_length': response.headers.get('Content-Length', ''),
+            }
+            
+            return response.content, content_type, http_headers
         
         except Exception as e:
             if retry < self.max_retries:
                 self.logger.warning(f"⚠️  Retry {retry+1}/{self.max_retries} : {url}")
                 time.sleep(self.delay * (retry + 1))
-                return self._download_file(url, retry + 1)
+                return self._download_file(url, retry + 1, if_modified_since)
             else:
                 self.logger.error(f"❌ Échec : {url} - {str(e)}")
                 self.session_stats['errors'] += 1
@@ -262,9 +296,89 @@ class CNILScraperFinal:
                 })
                 return None
     
+    def _compute_content_hash(self, content: bytes) -> str:
+        """SHA256 du contenu pour détection de changements"""
+        return hashlib.sha256(content).hexdigest()
+    
+    def _parse_http_date(self, http_date: str) -> Optional[str]:
+        """Convertit une date HTTP (RFC 2822) en ISO 8601
+        
+        Ex: 'Sun, 01 Mar 2026 10:28:39 GMT' → '2026-03-01T10:28:39+00:00'
+        """
+        if not http_date:
+            return None
+        try:
+            dt = parsedate_to_datetime(http_date)
+            return dt.isoformat()
+        except Exception:
+            return None
+    
+    def _extract_page_dates(self, soup: BeautifulSoup) -> Dict[str, Optional[str]]:
+        """Extrait les dates de publication/modification depuis le HTML CNIL
+        
+        Le site CNIL expose les dates de deux façons :
+        - <span class="element-date">Publié le  26/01/2026</span>  (pages listing)
+        - <p class="date">05 septembre 2024</p>                    (pages article)
+        
+        Returns:
+            Dict avec 'published_at' (première date trouvée = date de publication principale)
+            et 'page_dates' (liste de toutes les dates trouvées sur la page)
+        """
+        dates_found = []
+        
+        # Pattern 1 : <span class="element-date">Publié le  DD/MM/YYYY</span>
+        for span in soup.find_all('span', class_='element-date'):
+            text = span.get_text(strip=True)
+            match = re.search(r'(\d{2})/(\d{2})/(\d{4})', text)
+            if match:
+                day, month, year = match.groups()
+                try:
+                    iso = f"{year}-{month}-{day}"
+                    dates_found.append(iso)
+                except ValueError:
+                    pass
+        
+        # Pattern 2 : <p class="date">DD mois YYYY</p>
+        mois_fr = {
+            'janvier': '01', 'février': '02', 'mars': '03', 'avril': '04',
+            'mai': '05', 'juin': '06', 'juillet': '07', 'août': '08',
+            'septembre': '09', 'octobre': '10', 'novembre': '11', 'décembre': '12'
+        }
+        for p in soup.find_all('p', class_='date'):
+            text = p.get_text(strip=True).lower()
+            match = re.search(r'(\d{1,2})\s+(\w+)\s+(\d{4})', text)
+            if match:
+                day, mois_str, year = match.groups()
+                month_num = mois_fr.get(mois_str)
+                if month_num:
+                    iso = f"{year}-{month_num}-{day.zfill(2)}"
+                    dates_found.append(iso)
+        
+        # Pattern 3 : <time datetime="..."> (si jamais CNIL l'ajoute)
+        for time_tag in soup.find_all('time'):
+            dt_val = time_tag.get('datetime', '')
+            if dt_val:
+                dates_found.append(dt_val[:10])  # YYYY-MM-DD
+        
+        return {
+            'published_at': dates_found[0] if dates_found else None,
+            'page_dates': dates_found if dates_found else None,
+        }
+    
     def _save_file_with_metadata(self, url: str, content: bytes, file_type: str, 
-                                 source_url: str = None) -> str:
-        """Sauvegarde fichier + métadonnées complètes"""
+                                 source_url: str = None,
+                                 http_headers: Dict[str, str] = None,
+                                 page_dates: Dict[str, Optional[str]] = None) -> str:
+        """Sauvegarde fichier + métadonnées complètes
+        
+        Schéma metadata unifié (HTML et PDF/docs) :
+        - Identité : url, url_hash, file_type, extension, file_path
+        - Contenu : file_size_bytes, content_hash (SHA256)
+        - Provenance : source_url
+        - Dates serveur : http_last_modified (ISO 8601 depuis Last-Modified HTTP)
+        - Dates page : published_at (date de publication CNIL), page_dates (toutes)
+        - Scraping : scraped_at, scraper_version
+        """
         url_hash = self._get_url_hash(url)
         
         # Déterminer extension et dossier
@@ -289,16 +403,40 @@ class CNILScraperFinal:
         file_path = output_dir / f"{url_hash}{ext}"
         file_path.write_bytes(content)
         
-        # Métadonnées COMPLÈTES
+        # Préparer headers HTTP
+        if http_headers is None:
+            http_headers = {}
+        
+        # Préparer dates page
+        if page_dates is None:
+            page_dates = {}
+        
+        # Métadonnées COMPLÈTES — schéma unifié v2
         metadata = {
+            # Identité
             'url': url,
             'url_hash': url_hash,
             'file_type': file_type,
             'extension': ext,
             'file_path': str(file_path.relative_to(self.project_root)),
             'file_size_bytes': len(content),
-            'source_url': source_url,  # URL de la page qui contient ce fichier
+            
+            # Détection de changement
+            'content_hash': self._compute_content_hash(content),
+            
+            # Provenance
+            'source_url': source_url,
+            
+            # Dates serveur HTTP
+            'http_last_modified': self._parse_http_date(http_headers.get('last_modified', '')),
+            
+            # Dates extraites de la page HTML
+            'published_at': page_dates.get('published_at'),
+            'page_dates': page_dates.get('page_dates'),
+            
+            # Scraping
             'scraped_at': datetime.now().isoformat(),
+            'scraper_version': 'v2',
         }
         
         metadata_path = self.output_dirs['metadata'] / f"{url_hash}.json"
@@ -357,28 +495,51 @@ class CNILScraperFinal:
         
         return resources
     
-    def scrape_url(self, url: str, source_url: str = None) -> Optional[BeautifulSoup]:
-        """Scrape une URL avec gestion complète"""
+    def scrape_url(self, url: str, source_url: str = None,
+                    if_modified_since: str = None) -> Optional[BeautifulSoup]:
+        """Scrape une URL avec gestion complète
+        
+        Args:
+            url: URL à scraper
+            source_url: URL de la page parent (pour PDFs/docs embarqués)
+            if_modified_since: Pour le mode update — skip si 304
+        
+        Returns:
+            BeautifulSoup si HTML, None sinon ou si échec/304
+        """
         if url in self.visited_urls:
             return None
         
         self.visited_urls.add(url)
         
-        result = self._download_file(url)
+        result = self._download_file(url, if_modified_since=if_modified_since)
         if result is None:
             return None
         
-        content, content_type = result
+        content, content_type, http_headers = result
         file_type = self._detect_file_type(url, content_type)
         
-        # Sauvegarder
-        local_path = self._save_file_with_metadata(url, content, file_type, source_url)
-        self.downloaded_resources[url] = local_path
-        
-        # Si HTML, extraire ressources
+        # Extraire dates de la page HTML AVANT de sauvegarder
+        page_dates = {}
+        soup = None
         if file_type == 'html':
             try:
                 soup = BeautifulSoup(content, 'lxml')
+                page_dates = self._extract_page_dates(soup)
+            except Exception as e:
+                self.logger.warning(f"⚠️  Erreur extraction dates {url}: {e}")
+        
+        # Sauvegarder avec metadata enrichies
+        local_path = self._save_file_with_metadata(
+            url, content, file_type, source_url,
+            http_headers=http_headers,
+            page_dates=page_dates,
+        )
+        self.downloaded_resources[url] = local_path
+        
+        # Si HTML, extraire ressources
+        if file_type == 'html' and soup:
+            try:
                 resources = self._extract_resources_from_html(soup, url)
                 
                 # Télécharger ressources embarquées
@@ -474,6 +635,232 @@ class CNILScraperFinal:
         print("=" * 70)
 
 
+    def update_existing(self):
+        """Mode incrémental : re-scrape uniquement les pages modifiées
+        
+        Pour chaque document déjà scrapé :
+        1. Envoie une requête conditionnelle (If-Modified-Since)
+        2. Si 304 → skip (page inchangée)
+        3. Si 200 → compare content_hash
+           - Hash identique → skip (contenu identique malgré 200)
+           - Hash différent → re-sauvegarde avec nouvelles metadata
+        
+        Retourne un rapport des changements détectés.
+        """
+        self.logger.info("🔄 Mode UPDATE : vérification des modifications...")
+        
+        # Charger toutes les metadata existantes
+        metadata_dir = self.output_dirs['metadata']
+        metadata_files = list(metadata_dir.glob('*.json'))
+        
+        # Exclure le fichier d'état
+        metadata_files = [f for f in metadata_files if f.name != 'scraping_state_final.json']
+        
+        stats = {
+            'checked': 0,
+            'unchanged_304': 0,
+            'unchanged_hash': 0,
+            'modified': 0,
+            'errors': 0,
+            'new_fields_added': 0,
+            'modified_urls': [],
+        }
+        
+        self.logger.info(f"📄 {len(metadata_files)} documents à vérifier")
+        
+        for meta_file in tqdm(metadata_files, desc="Vérification modifications"):
+            try:
+                with open(meta_file, 'r', encoding='utf-8') as f:
+                    meta = json.load(f)
+                
+                url = meta.get('url', '')
+                if not url:
+                    continue
+                
+                stats['checked'] += 1
+                old_hash = meta.get('content_hash', '')
+                
+                # Requête conditionnelle avec If-Modified-Since
+                if_modified = meta.get('http_last_modified')
+                # Convertir ISO → HTTP date pour le header
+                http_if_modified = None
+                if if_modified:
+                    try:
+                        dt = datetime.fromisoformat(if_modified)
+                        http_if_modified = dt.strftime('%a, %d %b %Y %H:%M:%S GMT')
+                    except Exception:
+                        pass
+                
+                result = self._download_file(url, if_modified_since=http_if_modified)
+                
+                if result is None:
+                    # 304 Not Modified ou erreur
+                    if http_if_modified:  # On avait un If-Modified-Since → c'est un 304
+                        stats['unchanged_304'] += 1
+                    else:
+                        stats['errors'] += 1
+                    continue
+                
+                content, content_type, http_headers = result
+                new_hash = self._compute_content_hash(content)
+                file_type = self._detect_file_type(url, content_type)
+                
+                # Comparer le hash du contenu
+                if old_hash and new_hash == old_hash:
+                    # Contenu identique — mettre à jour les metadata manquantes si besoin
+                    updated = False
+                    if not meta.get('content_hash'):
+                        meta['content_hash'] = new_hash
+                        updated = True
+                    if not meta.get('http_last_modified') and http_headers.get('last_modified'):
+                        meta['http_last_modified'] = self._parse_http_date(http_headers['last_modified'])
+                        updated = True
+                    if not meta.get('published_at') and file_type == 'html':
+                        try:
+                            soup = BeautifulSoup(content, 'lxml')
+                            page_dates = self._extract_page_dates(soup)
+                            if page_dates.get('published_at'):
+                                meta['published_at'] = page_dates['published_at']
+                                meta['page_dates'] = page_dates.get('page_dates')
+                                updated = True
+                        except Exception:
+                            pass
+                    if not meta.get('scraper_version'):
+                        meta['scraper_version'] = 'v2'
+                        updated = True
+                    
+                    if updated:
+                        stats['new_fields_added'] += 1
+                        with open(meta_file, 'w', encoding='utf-8') as f:
+                            json.dump(meta, f, indent=2, ensure_ascii=False)
+                    
+                    stats['unchanged_hash'] += 1
+                    continue
+                
+                # Contenu modifié → re-sauvegarder
+                self.logger.info(f"📝 Modifié : {url}")
+                stats['modified'] += 1
+                stats['modified_urls'].append(url)
+                
+                # Extraire dates de la page
+                page_dates = {}
+                if file_type == 'html':
+                    try:
+                        soup = BeautifulSoup(content, 'lxml')
+                        page_dates = self._extract_page_dates(soup)
+                    except Exception:
+                        pass
+                
+                # Ne pas ajouter à visited_urls (on ne veut pas perturber l'état de crawl)
+                self._save_file_with_metadata(
+                    url, content, file_type, meta.get('source_url'),
+                    http_headers=http_headers,
+                    page_dates=page_dates,
+                )
+                
+            except Exception as e:
+                stats['errors'] += 1
+                self.logger.warning(f"⚠️  Erreur update {meta_file.name}: {e}")
+        
+        # Rapport
+        self._save_state()
+        
+        print("\n" + "=" * 70)
+        print("📊 RAPPORT DE MISE À JOUR")
+        print("=" * 70)
+        print(f"   Documents vérifiés  : {stats['checked']}")
+        print(f"   Inchangés (304)     : {stats['unchanged_304']}")
+        print(f"   Inchangés (hash)    : {stats['unchanged_hash']}")
+        print(f"   ✏️  Modifiés          : {stats['modified']}")
+        print(f"   🏷️  Metadata enrichies: {stats['new_fields_added']}")
+        print(f"   ❌ Erreurs           : {stats['errors']}")
+        
+        if stats['modified_urls']:
+            print(f"\n📝 URLs modifiées :")
+            for u in stats['modified_urls']:
+                print(f"   - {u}")
+        
+        print("=" * 70)
+        
+        return stats
+    
+    def backfill_metadata(self):
+        """Enrichit les metadata existantes SANS re-télécharger
+        
+        Pour chaque fichier déjà présent localement :
+        - Ajoute content_hash (SHA256) si manquant
+        - Extrait les dates de la page HTML si manquantes
+        - Unifie le schéma (scraped_at, scraper_version, etc.)
+        
+        Ne fait AUCUNE requête HTTP. Utile pour migrer les anciennes metadata.
+        """
+        self.logger.info("🏷️  Mode BACKFILL : enrichissement metadata local...")
+        
+        metadata_dir = self.output_dirs['metadata']
+        metadata_files = [f for f in metadata_dir.glob('*.json') 
+                         if f.name != 'scraping_state_final.json']
+        
+        stats = {'processed': 0, 'updated': 0, 'errors': 0}
+        
+        for meta_file in tqdm(metadata_files, desc="Backfill metadata"):
+            try:
+                with open(meta_file, 'r', encoding='utf-8') as f:
+                    meta = json.load(f)
+                
+                file_path = self.project_root / meta.get('file_path', '')
+                if not file_path.exists():
+                    continue
+                
+                stats['processed'] += 1
+                updated = False
+                
+                # 1. Ajouter content_hash si manquant
+                if not meta.get('content_hash'):
+                    content = file_path.read_bytes()
+                    meta['content_hash'] = self._compute_content_hash(content)
+                    updated = True
+                
+                # 2. Extraire dates de la page HTML si manquantes
+                if not meta.get('published_at') and meta.get('file_type') == 'html':
+                    try:
+                        content = file_path.read_bytes()
+                        soup = BeautifulSoup(content, 'lxml')
+                        page_dates = self._extract_page_dates(soup)
+                        if page_dates.get('published_at'):
+                            meta['published_at'] = page_dates['published_at']
+                            meta['page_dates'] = page_dates.get('page_dates')
+                            updated = True
+                    except Exception:
+                        pass
+                
+                # 3. Harmoniser scraped_at (certains ont downloaded_at)
+                if not meta.get('scraped_at') and meta.get('downloaded_at'):
+                    meta['scraped_at'] = meta['downloaded_at']
+                    updated = True
+                
+                # 4. Ajouter url_hash si manquant
+                if not meta.get('url_hash') and meta.get('url'):
+                    meta['url_hash'] = self._get_url_hash(meta['url'])
+                    updated = True
+                
+                # 5. Marquer version schéma
+                if meta.get('scraper_version') != 'v2':
+                    meta['scraper_version'] = 'v2'
+                    updated = True
+                
+                if updated:
+                    stats['updated'] += 1
+                    with open(meta_file, 'w', encoding='utf-8') as f:
+                        json.dump(meta, f, indent=2, ensure_ascii=False)
+                
+            except Exception as e:
+                stats['errors'] += 1
+                self.logger.warning(f"⚠️  Erreur backfill {meta_file.name}: {e}")
+        
+        print(f"\n🏷️  Backfill terminé : {stats['updated']}/{stats['processed']} metadata enrichies, {stats['errors']} erreurs")
+        return stats
+
+
 def main():
     import argparse
     
@@ -481,11 +868,21 @@ def main():
     parser.add_argument('--url', type=str, help='URL de départ')
     parser.add_argument('--depth', type=int, default=5, help='Profondeur max')
     parser.add_argument('--project-root', type=str, default='.', help='Racine projet')
+    parser.add_argument('--update', action='store_true',
+                        help='Mode incrémental : ne re-scrape que les pages modifiées')
+    parser.add_argument('--backfill', action='store_true',
+                        help='Enrichir les metadata existantes sans re-télécharger')
     
     args = parser.parse_args()
     
     scraper = CNILScraperFinal(args.project_root)
-    scraper.scrape_recursive(start_url=args.url, max_depth=args.depth)
+    
+    if args.backfill:
+        scraper.backfill_metadata()
+    elif args.update:
+        scraper.update_existing()
+    else:
+        scraper.scrape_recursive(start_url=args.url, max_depth=args.depth)
 
 
 if __name__ == "__main__":

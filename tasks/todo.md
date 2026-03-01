@@ -1,10 +1,44 @@
 # Todo List — RAG-DPO System
 
-**Dernière MAJ** : 2026-02-12
+**Dernière MAJ** : 2026-03-01
 
 ---
 
-## 🚀 PROCHAINE ÉTAPE : Pipeline Données Entreprise
+## 🗺️ Roadmap v2
+
+| Prio | Chantier | Effort | Statut |
+|------|----------|--------|--------|
+| **1** | 🏷️ Metadata scraper (Last-Modified, hash, dates) | 1-2j | ✅ Done |
+| **2** | 🧠 Migration BGE-M3 (remplace nomic + BM25 séparé) | 2-3j | ✅ Done |
+| **3** | 📂 Pipeline ingestion entreprise (incrémental) | 1 sem | 🔨 En cours |
+| **4** | 📊 Observabilité (logs, feedback, dashboard) | 2-3j | 🔲 |
+| **5** | 🐳 Docker (on package le produit fini) | 2-3j | 🔲 |
+| **6** | 🕸️ Graph RAG (LightRAG) | 2 sem | 🔲 v2 |
+
+---
+
+## 🚀 PROCHAINE ÉTAPE : Migration BGE-M3
+
+### Objectif
+Remplacer nomic-embed-text (anglais seul, 137M) par BGE-M3 (multilingue, 568M, dense+sparse intégré).
+Gains attendus : meilleur retrieval FR, simplification archi (BM25 séparé → sparse intégré).
+
+### Sous-tâches
+- [x] Installer FlagEmbedding / sentence-transformers pour BGE-M3
+- [x] Créer `src/utils/embedding_provider.py` — provider BGE-M3 dédié (FP16, GPU, lazy load)
+- [x] Adapter `create_chromadb_index.py` pour embeddings BGE-M3 (1024 dims au lieu de 768)
+- [x] Supprimer troncature legacy nomic ([:2500] coupait 49.5% des chunks)
+- [x] Adapter `retriever.py` — méthode `_embed()` avec fallback
+- [x] Adapter `pipeline.py`, `app.py`, `test_rag.py`, `eval/run_eval.py`
+- [x] Mettre à jour `config.yaml` — section embeddings BGE-M3
+- [x] Re-indexer 14,388 chunks (100% succès, 1024 dims, texte complet)
+- [x] Adapter le VRAM budget (Mistral-Nemo ~7-8GB + BGE-M3 ~1.07GB = ~9GB / 12GB)
+- [x] Benchmark comparatif nomic vs BGE-M3 sur les 18 questions (BGE-M3 91.8% vs nomic 90.7%)
+- [ ] Évaluer si le sparse intégré BGE-M3 peut remplacer `bm25_index.py` (v2)
+
+---
+
+## 📂 Pipeline Données Entreprise
 
 ### Objectif
 Permettre aux DPO d'alimenter le RAG avec **leurs propres documents internes** (politiques internes, registres de traitement, contrats, PIA, etc.) tout en conservant la base CNIL comme référentiel autoritaire.
@@ -12,23 +46,24 @@ Permettre aux DPO d'alimenter le RAG avec **leurs propres documents internes** (
 ### Fonctionnalités à implémenter
 
 #### 1. Pipeline d'ingestion entreprise
-- [ ] Script d'import fichiers entreprise (PDF, DOCX, XLSX, HTML)
-- [ ] Extraction texte + chunking (réutiliser `process_and_chunk.py`)
-- [ ] Métadonnées source : `source: "enterprise"` vs `source: "cnil"`
+- [x] Script d'import fichiers entreprise (PDF, DOCX, XLSX, HTML, TXT)
+- [x] Extraction texte + chunking (réutilise `StructuralChunker` de `process_and_chunk.py`)
+- [x] Métadonnées source : `source: "enterprise"` vs `source: "cnil"`
 - [ ] Classification automatique (nature/index) adaptée au contexte entreprise
-- [ ] Support batch (dossier) et unitaire (fichier)
+- [x] Support batch (dossier) et unitaire (fichier)
+- [x] CLI complète : `--purge`, `--list`, `--stats`, `--recursive`
+- [x] Déduplication par hash SHA256 (relancer = pas de doublons)
 
-#### 2. Stratégie VectorDB
-- [ ] **Option A — Append** : ajouter les chunks entreprise dans le même ChromaDB
-  - Avantage : recherche unifiée, simple
-  - Risque : contamination si mauvaise pondération
-- [ ] **Option B — VectorDB séparé** : ChromaDB dédié entreprise
-  - Avantage : isolation, purge facile
-  - Nécessite : fusion au query-time (multi-collection retrieval)
-- [ ] **Option C — Hybride** : VectorDB séparé + fusion pondérée au retrieval
-  - Retrieval parallèle CNIL + entreprise
-  - RRF fusion avec poids différenciés
-  - **← Recommandé**
+#### 2. Stratégie VectorDB — ✅ Option A (Append) + pré-filtrage natif
+- [x] Chunks entreprise dans la même collection ChromaDB `rag_dpo_chunks`
+- [x] Filtrage par `source: "ENTREPRISE"` pour purge/listing
+- [x] Purge entreprise sans affecter CNIL (testé)
+- [x] Tags booléens par chunk (`tag_registre: true`, `tag_pia: true`) → filtrable nativement par ChromaDB
+- [x] Pré-filtrage ChromaDB `$or` : CNIL toujours inclus + tags entreprise sélectionnés
+- [x] Registre auto `configs/enterprise_tags.json` (MAJ à chaque ingestion/purge)
+- [x] UI Streamlit : multiselect des tags avec labels lisibles
+- [x] Tags par défaut (ex: politique_interne) pré-sélectionnés dans l'UI
+- [x] Distinction [CNIL] / [Interne] dans le context builder et les cartes sources
 
 #### 3. Système de pondération (importance weights)
 - [ ] Poids par source : CNIL > entreprise (CNIL = référentiel, entreprise = contexte)
@@ -42,14 +77,14 @@ Permettre aux DPO d'alimenter le RAG avec **leurs propres documents internes** (
 - [ ] Config par tenant dans `configs/`
 - [ ] Interface Streamlit : sélecteur d'entreprise
 
-### Architecture cible
+### Architecture implémentée
 ```
 Question DPO
+    → [UI] Sélection tags entreprise (multiselect sidebar)
+    → build_enterprise_where_filter() → $or[CNIL, tag_X, tag_Y]
     → Query Expansion (x3)
-    → Retrieval CNIL (ChromaDB CNIL, BM25 CNIL)
-    → Retrieval Entreprise (ChromaDB Entreprise, BM25 Entreprise)
-    → RRF Fusion pondérée (w_cnil=1.0, w_enterprise=0.7)
-    → Jina Reranker (top-20 → top-8)
+    → Hybrid Retrieval (ChromaDB + BM25) avec pré-filtre natif
+    → Jina Reranker (40 → 10 chunks)
     → Dual Generation + Grounding
     → Réponse avec sources [CNIL] et [Interne]
 ```
@@ -97,6 +132,13 @@ Question DPO
 - [x] Interface Streamlit
 - [x] Évaluation 18 questions : **93% global, 84% correctness, 100% faithfulness**
 
+### v1.1 — Metadata enrichies (2026-03-01)
+- [x] Scraper v2 : capture Last-Modified HTTP, content_hash SHA256, dates page CNIL
+- [x] Backfill 16 909 metadata existantes (content_hash + published_at + schéma unifié)
+- [x] Mode `--update` : scraping incrémental avec requêtes conditionnelles (If-Modified-Since → 304)
+- [x] Mode `--backfill` : enrichissement metadata sans requêtes HTTP
+- [x] Schéma metadata unifié v2 (HTML et PDF convergent)
+
 ### Évolution scores évaluation
 | Version | Global | Correctness | Temps/q |
 |---------|--------|-------------|---------|
@@ -108,6 +150,8 @@ Question DPO
 | v6 BM25 Boost | 92% | 81% | 14.0s |
 | **v7 Dual-Gen (BEST)** | **93%** | **84%** | **17.3s** |
 | v7b Reverse test | 91% | 81% | 14.8s |
+| **v8 BGE-M3 (scoring v2)** | **91.8%** | **86.3%** | **24.8s** |
+| v8 nomic (scoring v2) | 90.7% | 83.9% | 28.9s |
 
 ---
 

@@ -146,6 +146,12 @@ class InstallationChecker:
                     else:
                         self.warn_item("  mistral-nemo", "Modèle LLM non téléchargé — ollama pull mistral-nemo")
                     
+                    has_llava = any('llava' in m for m in models)
+                    if has_llava:
+                        self.check_item("  llava:7b", True, "Modèle vision (extraction texte images) présent")
+                    else:
+                        self.warn_item("  llava:7b", "Modèle vision non téléchargé — ollama pull llava:7b")
+                    
                     # BGE-M3 est géré par sentence-transformers (pas Ollama)
                     try:
                         from sentence_transformers import SentenceTransformer

@@ -239,6 +239,7 @@ pip install -r requirements.txt
 
 ```bash
 ollama pull mistral-nemo        # LLM 12B (7.1 GB)
+ollama pull llava:7b             # Vision — extraction texte images (4.7 GB)
 ```
 
 > **Note** : Les embeddings BGE-M3 (sentence-transformers) sont téléchargés automatiquement au premier lancement.

@@ -42,6 +42,7 @@ def init_rag_system():
     from src.utils.llm_provider import OllamaProvider
     from src.utils.embedding_provider import EmbeddingProvider
     from src.rag.pipeline import create_pipeline
+    from src.rag.agent import create_agent_pipeline
     from src.utils.query_logger import QueryLogger
     from src.utils.alerter import Alerter, load_alert_config
 
@@ -62,7 +63,25 @@ def init_rag_system():
             cache_dir=str(project_root / "models" / "huggingface" / "hub"),
         )
 
+        # Pipeline natif (single-gen, intent-aware)
         pipeline = create_pipeline(
+            collection=collection,
+            llm_provider=llm_provider,
+            embedding_provider=embedding_provider,
+            n_documents=5,
+            n_chunks_per_doc=3,
+            enable_hybrid=True,
+            enable_reranker=True,
+            enable_dual_gen=False,  # Single-gen (intent classifier suffit)
+            enable_summary_prefilter=True,
+            enable_validation=True,
+            model="mistral-nemo",
+            temperature=0.0,
+            debug_mode=False,
+        )
+
+        # Pipeline agent LangGraph
+        agent_pipeline = create_agent_pipeline(
             collection=collection,
             llm_provider=llm_provider,
             embedding_provider=embedding_provider,
@@ -74,7 +93,7 @@ def init_rag_system():
             enable_validation=True,
             model="mistral-nemo",
             temperature=0.0,
-            debug_mode=False,
+            max_retries=1,
         )
 
         query_logger = QueryLogger()
@@ -88,6 +107,7 @@ def init_rag_system():
 
         return {
             "pipeline": pipeline,
+            "agent_pipeline": agent_pipeline,
             "collection": collection,
             "embedding_provider": embedding_provider,
             "chunk_count": collection.count(),

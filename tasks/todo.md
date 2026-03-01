@@ -14,7 +14,8 @@
 | **4** | 📊 Observabilité (logs, feedback, dashboard) | 2-3j | ✅ Done |
 | **5** | 🐳 Docker (on package le produit fini) | 2-3j | 🔲 |
 | **5b** | 🔄 Init & Update CNIL (routine mensuelle) | 1j | ✅ Done |
-| **6** | 🧠 Intent-Aware Pipeline (assistant structuré) | 2-3j | 🔨 En cours |
+| **6** | 🧠 Intent-Aware Pipeline (assistant structuré) | 2-3j | ✅ Done |
+| **6b** | 🤖 Pipeline Agent LangGraph | 1-2j | ✅ Done |
 | **7** | 🕸️ Graph RAG (LightRAG) | 2 sem | 🔲 v2 |
 
 ---

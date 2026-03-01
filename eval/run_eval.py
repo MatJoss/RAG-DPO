@@ -521,13 +521,15 @@ def evaluate_single(qa_item: Dict, answer: str, sources: List[Dict] = None, use_
 # Pipeline Init
 # ═══════════════════════════════════════════════════════════════
 
-def init_pipeline(embedding_mode: str = "bge-m3"):
+def init_pipeline(embedding_mode: str = "bge-m3", enable_dual_gen: bool = True, use_agent: bool = False):
     """
     Initialise le pipeline RAG pour l'évaluation.
     
     Args:
         embedding_mode: 'bge-m3' (défaut) ou 'nomic' pour sélectionner
                         l'embedding provider et la collection ChromaDB correspondante.
+        enable_dual_gen: Active/désactive la dual-generation (self-consistency).
+        use_agent: Si True, utilise le pipeline LangGraph agent au lieu du natif.
     """
     import chromadb
     from src.utils.llm_provider import OllamaProvider
@@ -581,12 +583,31 @@ def init_pipeline(embedding_mode: str = "bge-m3"):
         n_chunks_per_doc=3,
         enable_hybrid=True,
         enable_reranker=True,
+        enable_dual_gen=enable_dual_gen,
         enable_summary_prefilter=True,
         enable_validation=True,
         model="mistral-nemo",
         temperature=0.0,
         debug_mode=True,
     )
+    
+    if use_agent:
+        from src.rag.agent import create_agent_pipeline
+        pipeline = create_agent_pipeline(
+            collection=collection,
+            llm_provider=llm_provider,
+            embedding_provider=embedding_provider,
+            n_documents=5,
+            n_chunks_per_doc=3,
+            enable_hybrid=True,
+            enable_reranker=True,
+            enable_summary_prefilter=True,
+            enable_validation=True,
+            model="mistral-nemo",
+            temperature=0.0,
+            max_retries=1,
+        )
+        print(f"\U0001f916 Mode: Agent LangGraph (classify→retrieve→generate→validate→respond)")
     
     return pipeline
 
@@ -602,6 +623,8 @@ def run_evaluation(
     verbose: bool = False,
     use_llm_judge: bool = True,
     embedding_mode: str = "bge-m3",
+    enable_dual_gen: bool = True,
+    use_agent: bool = False,
 ) -> Dict:
     """
     Exécute l'évaluation complète.
@@ -641,8 +664,10 @@ def run_evaluation(
         return {}
     
     # Init pipeline
-    print(f"⏳ Initialisation du pipeline RAG ({emb_label})...")
-    pipeline = init_pipeline(embedding_mode=embedding_mode)
+    dual_label = "dual-gen" if enable_dual_gen else "single-gen"
+    agent_label = " [Agent LangGraph]" if use_agent else ""
+    print(f"\u23f3 Initialisation du pipeline RAG ({emb_label}, {dual_label}{agent_label})...")
+    pipeline = init_pipeline(embedding_mode=embedding_mode, enable_dual_gen=enable_dual_gen, use_agent=use_agent)
     print("✅ Pipeline prêt\n")
     
     # ═══════════════════════════════════════════════════════════
@@ -838,12 +863,16 @@ def run_evaluation(
     
     # Sauvegarder les résultats
     emb_suffix = "nomic" if embedding_mode == "nomic" else "bge-m3"
-    output_path = project_root / "eval" / f"results_{emb_suffix}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+    gen_suffix = "single" if not enable_dual_gen else "dual"
+    agent_suffix = "_agent" if use_agent else ""
+    output_path = project_root / "eval" / f"results_{emb_suffix}_{gen_suffix}{agent_suffix}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
     with open(output_path, "w", encoding="utf-8") as f:
         json.dump({
             "timestamp": datetime.now().isoformat(),
             "embedding_model": emb_label,
             "embedding_mode": embedding_mode,
+            "generation_mode": "single" if not enable_dual_gen else "dual",
+            "pipeline_mode": "agent" if use_agent else "native",
             "n_questions": len(dataset),
             "n_valid": len(valid_results),
             "n_errors": len(results) - len(valid_results),
@@ -876,6 +905,10 @@ def main():
     parser.add_argument("--dataset", default=None, help="Chemin vers le dataset JSON")
     parser.add_argument("--embedding", choices=["bge-m3", "nomic"], default="bge-m3",
                         help="Modèle d'embedding à utiliser (défaut: bge-m3)")
+    parser.add_argument("--no-dual", action="store_true",
+                        help="Désactive la dual-generation (single-gen, plus rapide)")
+    parser.add_argument("--agent", action="store_true",
+                        help="Utilise le pipeline LangGraph agent au lieu du natif")
     
     args = parser.parse_args()
     
@@ -892,6 +925,8 @@ def main():
         verbose=args.verbose,
         use_llm_judge=not args.no_llm_judge,
         embedding_mode=args.embedding,
+        enable_dual_gen=not args.no_dual,
+        use_agent=args.agent,
     )
 
 

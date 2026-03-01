@@ -114,6 +114,7 @@ class RAGPipeline:
         intent_classifier: Optional[IntentClassifier] = None,
         debug_mode: bool = False,
         enable_validation: bool = True,  # Validation ON par défaut
+        enable_dual_gen: bool = True,    # Dual-generation (self-consistency)
         rerank_candidates: int = 40,     # Candidats bruts passés au reranker (semantic+BM25, pas dédupliqués)
         rerank_top_k: int = 10,          # Nombre de chunks à garder après reranking
     ):
@@ -126,6 +127,7 @@ class RAGPipeline:
             reranker: Cross-encoder reranker (optionnel)
             intent_classifier: Classifieur d'intention (optionnel)
             debug_mode: Si True, inclut contexte et documents dans la réponse
+            enable_dual_gen: Si True, dual-generation avec self-consistency (2 passes)
             enable_validation: Active validation pertinence + grounding
             rerank_candidates: Chunks à envoyer au reranker
             rerank_top_k: Chunks à garder après reranking
@@ -137,6 +139,7 @@ class RAGPipeline:
         self.intent_classifier = intent_classifier
         self.debug_mode = debug_mode
         self.enable_validation = enable_validation
+        self.enable_dual_gen = enable_dual_gen
         self.rerank_candidates = rerank_candidates
         self.rerank_top_k = rerank_top_k
         
@@ -322,7 +325,7 @@ class RAGPipeline:
             # Si les réponses se contredisent, le contexte est ambigu.
             logger.info("🏗️  Phase 3 : Context Building")
             
-            if self.reranker is not None:
+            if self.reranker is not None and self.enable_dual_gen:
                 # ── DUAL-GENERATION (self-consistency via context order) ──
                 # Pass A : ordre naturel (Source 1 = plus pertinent en premier)
                 context_a = self.context_builder.build_context(
@@ -992,6 +995,7 @@ def create_pipeline(
     enable_validation: bool = True,  # Validation ON par défaut
     enable_hybrid: bool = True,      # Recherche hybride BM25+semantic
     enable_reranker: bool = True,    # Cross-encoder reranking
+    enable_dual_gen: bool = True,     # Dual-generation self-consistency
     enable_summary_prefilter: bool = True,  # Pré-filtre par summaries
     enable_query_expansion: bool = True,    # LLM query expansion (multi-query)
     summaries_path: Optional[str] = None,
@@ -1024,6 +1028,7 @@ def create_pipeline(
         enable_validation: Active validation pertinence + grounding
         enable_hybrid: Active BM25+semantic hybrid search
         enable_reranker: Active cross-encoder reranking
+        enable_dual_gen: Active dual-generation self-consistency (2 passes)
         enable_summary_prefilter: Active pré-filtre par summaries
         enable_query_expansion: Active LLM query expansion (multi-query retrieval)
         summaries_path: Chemin vers document_summaries.json (auto-détecté si None)
@@ -1126,6 +1131,7 @@ def create_pipeline(
         f"✅ Pipeline initialisé en {init_time:.1f}s "
         f"(hybrid={'ON' if enable_hybrid else 'OFF'}, "
         f"reranker={'ON' if enable_reranker else 'OFF'}, "
+        f"dual_gen={'ON' if enable_dual_gen else 'OFF'}, "
         f"summary_filter={'ON' if enable_summary_prefilter else 'OFF'}, "
         f"query_expansion={'ON' if enable_query_expansion else 'OFF'}, "
         f"intent_classifier=ON)"
@@ -1140,6 +1146,7 @@ def create_pipeline(
         intent_classifier=intent_classifier,
         debug_mode=debug_mode,
         enable_validation=enable_validation,
+        enable_dual_gen=enable_dual_gen,
         rerank_candidates=rerank_candidates,
         rerank_top_k=rerank_top_k,
     )

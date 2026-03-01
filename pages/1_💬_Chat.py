@@ -133,11 +133,27 @@ def main():
 
     system = get_system()
     pipeline = system["pipeline"]
+    agent_pipeline = system.get("agent_pipeline")
     query_logger = system["query_logger"]
 
     # ── Sidebar ──
     with st.sidebar:
         st.header("⚙️ Configuration")
+
+        # Toggle mode pipeline
+        if agent_pipeline is not None:
+            st.subheader("🤖 Mode Pipeline")
+            use_agent = st.toggle(
+                "Agent LangGraph",
+                value=False,
+                help="Active le pipeline agent (LangGraph) avec boucle de validation"
+            )
+            if use_agent:
+                st.caption("🤖 Agent: classify→retrieve→generate→validate→respond")
+            else:
+                st.caption("⚡ Natif: intent-aware single-gen")
+        else:
+            use_agent = False
 
         # Filtres nature
         st.subheader("🔍 Filtres")
@@ -282,7 +298,8 @@ def main():
         with st.chat_message("assistant"):
             with st.spinner("🤔 Recherche et analyse en cours..."):
                 try:
-                    response = pipeline.query(
+                    active_pipeline = agent_pipeline if use_agent else pipeline
+                    response = active_pipeline.query(
                         question=prompt,
                         where_filter=where_filter,
                         enterprise_tags=selected_enterprise_tags or None,
@@ -306,6 +323,7 @@ def main():
                             f"⏱️ {response.total_time:.1f}s "
                             f"| 📚 {len(response.sources)} sources "
                             f"| ✅ {len(response.cited_sources)} citées"
+                            f"{'  | 🤖 Agent' if use_agent else ''}"
                         )
 
                         render_sources_block(response.sources)

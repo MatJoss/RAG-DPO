@@ -185,6 +185,7 @@ def make_generate_node(components: NodeComponents):
         )
         
         # ── Injection des tool_results dans le user prompt ──
+        # Respecte max_context_length : on ne dépasse jamais le budget
         if tool_results:
             enrichment_lines = []
             
@@ -207,10 +208,24 @@ def make_generate_node(components: NodeComponents):
             
             if enrichment_lines:
                 enrichment_block = "\n".join(enrichment_lines)
-                context["user"] = context["user"] + f"\n\n{enrichment_block}\n"
-                logger.info(f"   🔧 {len(enrichment_lines)} lignes d'enrichissement injectées")
+                max_len = components.context_builder.max_context_length
+                current_len = len(context["user"])
+                available = max_len - current_len - 50  # 50 chars de marge séparateur
+                
+                if available >= len(enrichment_block):
+                    # L'enrichissement tient dans le budget → injecter tel quel
+                    context["user"] = context["user"] + f"\n\n{enrichment_block}\n"
+                    logger.info(f"   🔧 {len(enrichment_lines)} lignes d'enrichissement injectées ({len(enrichment_block)} chars)")
+                elif available >= 200:
+                    # Budget serré → tronquer l'enrichissement
+                    truncated = enrichment_block[:available] + "\n[...enrichissement tronqué...]"
+                    context["user"] = context["user"] + f"\n\n{truncated}\n"
+                    logger.warning(f"   🔧 Enrichissement tronqué ({len(enrichment_block)} → {available} chars)")
+                else:
+                    # Pas assez de place → skip silencieux
+                    logger.warning(f"   ⚠️  Enrichissement skippé (contexte déjà {current_len}/{max_len} chars)")
         
-        logger.info(f"   Context: {len(context['user'])} chars")
+        logger.info(f"   Context: {len(context['user'])} chars (max {components.context_builder.max_context_length})")
         
         # Generation
         generation_start = time.time()

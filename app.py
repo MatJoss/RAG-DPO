@@ -140,7 +140,7 @@ def main():
     st.markdown("---")
 
     # Navigation
-    col_chat, col_dash = st.columns(2)
+    col_chat, col_dash, col_docs = st.columns(3)
 
     with col_chat:
         st.markdown("""
@@ -166,6 +166,18 @@ def main():
         - Alertes automatiques
         """)
         st.page_link("pages/2_📊_Dashboard.py", label="**Ouvrir le Dashboard →**", icon="📊")
+
+    with col_docs:
+        st.markdown("""
+        ### 📂 Documents Entreprise
+        Ajoutez vos documents internes pour enrichir le RAG.
+        
+        - Upload PDF, DOCX, XLSX, HTML, TXT
+        - Tags métier personnalisables
+        - Purge par tag ou totale
+        - CNIL prévaut toujours
+        """)
+        st.page_link("pages/3_📂_Documents.py", label="**Gérer les documents →**", icon="📂")
 
     # Footer
     st.markdown("---")

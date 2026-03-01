@@ -25,6 +25,45 @@ from .reranker import CrossEncoderReranker, RankedChunk
 logger = logging.getLogger(__name__)
 
 
+def build_enterprise_where_filter(
+    base_filter: Optional[Dict] = None,
+    enterprise_tags: Optional[List[str]] = None,
+) -> Optional[Dict]:
+    """Construit le filtre ChromaDB incluant CNIL + tags entreprise sélectionnés.
+    
+    Logique : 
+    - Sans tags : pas de filtre source (tout passe = CNIL + ENTREPRISE)
+    - Avec tags : $or[source!=ENTREPRISE (= CNIL passe), tag_X=true, tag_Y=true, ...]
+    
+    Le filtre est combiné avec le base_filter existant (ex: chunk_nature) via $and.
+    
+    Args:
+        base_filter: Filtre ChromaDB existant (ex: {"chunk_nature": {"$in": ["GUIDE"]}})
+        enterprise_tags: Tags entreprise à inclure. Si None/vide, tout passe.
+        
+    Returns:
+        Filtre ChromaDB combiné, ou None si aucun filtre
+    """
+    # Pas de tags sélectionnés → pas de filtre source
+    if not enterprise_tags:
+        return base_filter
+    
+    # Construire le filtre source : CNIL passe toujours + tags sélectionnés
+    or_conditions = [
+        {"source": {"$ne": "ENTREPRISE"}},  # Tout ce qui n'est pas ENTREPRISE (= CNIL)
+    ]
+    for tag in enterprise_tags:
+        or_conditions.append({f"tag_{tag}": True})
+    
+    source_filter = {"$or": or_conditions}
+    
+    # Combiner avec le filtre existant
+    if base_filter:
+        return {"$and": [base_filter, source_filter]}
+    
+    return source_filter
+
+
 @dataclass
 class RAGResponse:
     """Réponse complète du système RAG"""
@@ -106,6 +145,7 @@ class RAGPipeline:
         self,
         question: str,
         where_filter: Optional[Dict] = None,
+        enterprise_tags: Optional[List[str]] = None,
         conversation_history: Optional[List[Dict[str, str]]] = None,
         n_documents: Optional[int] = None,
         n_chunks_per_doc: Optional[int] = None,
@@ -118,6 +158,9 @@ class RAGPipeline:
         Args:
             question: Question de l'utilisateur
             where_filter: Filtre ChromaDB optionnel (ex: {"chunk_nature": "GUIDE"})
+            enterprise_tags: Tags entreprise à inclure (en plus de CNIL). 
+                Si None ou vide, tous les docs entreprise passent.
+                Ex: ["registre", "pia"] → seuls les chunks entreprise ayant ces tags sont gardés.
             conversation_history: Historique optionnel [{role: str, content: str}]
             n_documents: Override nombre de documents
             n_chunks_per_doc: Override chunks par document
@@ -134,6 +177,11 @@ class RAGPipeline:
         logger.info(f"{'='*80}\n")
         
         try:
+            # 0. CONSTRUCTION DU FILTRE (tags entreprise = pré-filtrage ChromaDB natif)
+            effective_filter = build_enterprise_where_filter(where_filter, enterprise_tags)
+            if enterprise_tags:
+                logger.info(f"🏷️  Filtre tags entreprise : {enterprise_tags}")
+            
             # 1. RETRIEVAL
             logger.info("📥 Phase 1 : Retrieval")
             retrieval_start = time.time()
@@ -144,7 +192,7 @@ class RAGPipeline:
                 raw_candidates = self.retriever.retrieve_candidates(
                     query=question,
                     n_candidates=self.rerank_candidates,
-                    where_filter=where_filter,
+                    where_filter=effective_filter,
                 )
                 
                 retrieval_time = time.time() - retrieval_start
@@ -187,7 +235,7 @@ class RAGPipeline:
                 # Sans reranker : flow classique avec dédup par document
                 documents = self.retriever.retrieve(
                     query=question,
-                    where_filter=where_filter,
+                    where_filter=effective_filter,
                     n_documents=n_documents,
                     n_chunks_per_doc=n_chunks_per_doc
                 )
@@ -914,6 +962,7 @@ Réponse de synthèse :"""
 def create_pipeline(
     collection,
     llm_provider,
+    embedding_provider=None,
     n_documents: int = 5,
     n_chunks_per_doc: int = 3,
     max_context_length: int = 32000,  # ~8000 tokens, Nemo 128K
@@ -945,7 +994,8 @@ def create_pipeline(
     
     Args:
         collection: Collection ChromaDB
-        llm_provider: Provider LLM
+        llm_provider: Provider LLM (génération, chat)
+        embedding_provider: Provider d'embeddings BGE-M3 (si None, fallback sur llm_provider.embed)
         n_documents: Nombre de documents à récupérer
         n_chunks_per_doc: Chunks par document
         max_context_length: Longueur max du contexte (chars)
@@ -1013,6 +1063,7 @@ def create_pipeline(
     retriever = create_retriever(
         collection=collection,
         llm_provider=llm_provider,
+        embedding_provider=embedding_provider,
         summary_bm25_index=summary_bm25,
         chunk_bm25_index=chunk_bm25,
         query_expander=query_expander,
@@ -1035,16 +1086,10 @@ def create_pipeline(
         # Le modèle sera chargé en lazy au premier appel
     
     # ── Context Builder ──
-    # Désactiver reverse packing quand le reranker est actif :
-    # le reranker produit un ordre optimal par cross-encoder, mais le reverse
-    # packing peut placer un faux positif contextuel (bien scoré mais hors sujet
-    # précis) en dernière position → maximum de recency bias → réponse biaisée.
-    use_reverse_packing = not enable_reranker
     context_builder = create_context_builder(
         max_context_length=max_context_length,
         include_metadata=True,
         llm_provider=llm_provider,  # Pour résumés intelligents
-        reverse_packing=use_reverse_packing,
     )
     
     # ── Generator ──

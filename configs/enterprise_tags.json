@@ -1,0 +1,16 @@
+{
+  "_comment": "Registre des tags entreprise — MIS À JOUR AUTOMATIQUEMENT à chaque ingestion. Ne pas éditer la section 'active_tags'. Vous pouvez éditer 'labels' pour personnaliser les noms affichés dans l'UI.",
+  "default_tags": [
+    "politique_interne"
+  ],
+  "active_tags": [],
+  "labels": {
+    "politique_interne": "📋 Politiques internes",
+    "registre": "📊 Registre des traitements",
+    "pia": "🔍 Analyses d'impact (PIA)",
+    "contrat": "📝 Contrats / DPA",
+    "procedure": "⚙️ Procédures internes",
+    "formation": "🎓 Supports de formation",
+    "audit": "📈 Rapports d'audit"
+  }
+}

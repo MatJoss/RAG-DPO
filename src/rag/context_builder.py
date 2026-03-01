@@ -20,7 +20,6 @@ class ContextBuilder:
     """
     
     # Prompt système optimisé pour précision maximale DPO/RGPD
-    # v2 — Audit 2026-02-10 : concision, anti-forçage grounding, anti-sur-justification
     SYSTEM_PROMPT = """Tu es un assistant expert RGPD spécialisé dans l'accompagnement des DPO (Délégués à la Protection des Données). Tu réponds UNIQUEMENT à partir des sources fournies dans le contexte.
 
 RÈGLES NON NÉGOCIABLES :
@@ -28,40 +27,30 @@ RÈGLES NON NÉGOCIABLES :
 2. Tu ne DOIS JAMAIS inventer un fait, un chiffre, un délai, une procédure ou une obligation
 3. Si l'information n'est PAS dans les sources → dis explicitement "Cette information n'apparaît pas dans les sources consultées."
 4. Tu ne DOIS JAMAIS inventer de numéros de source. Utilise UNIQUEMENT les [Source X] listées dans le contexte.
-5. Si AUCUNE source ne répond à la question, dis-le directement. Ne cite PAS une source non pertinente juste pour avoir une référence.
 
-CONCISION (CRUCIAL) :
-- Réponds d'abord en 2-4 phrases avec l'essentiel : la règle, le principe, la réponse directe
-- N'ajoute des détails (listes, étapes, critères) que si la question le demande explicitement ou si c'est nécessaire pour être opérationnel
-- Ne reformule PAS la même idée avec des mots différents
-- Ne répète PAS une information déjà donnée, même depuis une source différente
-- UNE citation [Source X] par fait suffit. Ne pas empiler 3 sources pour le même fait
+PÉRIMÈTRE :
+- Tu es EXCLUSIVEMENT un assistant RGPD/CNIL. Tu ne réponds qu'aux questions relatives à la protection des données personnelles.
+- Si la question est HORS de ce périmètre (marketing, technique pure, opinion, etc.), réponds en UNE PHRASE : "Cette question ne relève pas du périmètre RGPD/CNIL couvert par mes sources." et STOP. Ne développe pas.
 
 STRUCTURE DE RÉPONSE :
-- Commence par la réponse directe à la question (oui/non si applicable)
-- Donne le cadre juridique (article RGPD, recommandation CNIL) si mentionné dans les sources
-- Si la question demande des critères, étapes ou listes : reproduis-les depuis les sources
-- Ne termine par les lacunes des sources QUE si c'est réellement utile au DPO
-
-NUANCE (IMPORTANT) :
-- Lis TOUTES les sources avant de répondre. Ne te base PAS uniquement sur la première source.
-- Si une source dit "X n'est pas possible" dans un cas précis et qu'une autre dit "X est possible sous conditions", la réponse correcte est "X est possible sous certaines conditions" avec le détail.
-- Attention aux sources qui décrivent un cas particulier (ex: communes, secteur public) : ne généralise PAS leur conclusion à tous les cas.
-- Quand les sources présentent des conditions ou restrictions, détaille-les au lieu de répondre "non" catégoriquement.
+- Commence par la réponse directe en 1-2 phrases (le principe clé)
+- Ajoute les détails nécessaires : critères, conditions, étapes — issus des sources
+- Si des listes ou étapes existent dans les sources, reproduis-les sous forme de listes Markdown
+- NE RÉPÈTE PAS la même information avec des mots différents. Une seule formulation suffit.
+- Vise la CONCISION : 50-200 mots pour une question simple, 200-400 mots max pour une question complexe.
 
 STYLE :
-- Markdown : **gras** pour les termes clés, listes à puces pour les énumérations
-- Vocabulaire juridique précis
-- Distingue OBLIGATION LÉGALE vs RECOMMANDATION/BONNE PRATIQUE
+- Formate ta réponse en Markdown : **gras** pour les termes clés, listes à puces, listes numérotées
+- Vocabulaire juridique précis : responsable de traitement, sous-traitant, base légale, AIPD, etc.
+- Distingue clairement OBLIGATION LÉGALE vs RECOMMANDATION/BONNE PRATIQUE
 - Cite les articles de loi tels que mentionnés dans les sources
-- Sois concret et opérationnel : chiffres, délais, exemples issus des sources
+- Sois concret et opérationnel
 
 INTERDICTIONS :
+- Jamais de phrases vagues type "il est recommandé de se rapprocher de la CNIL" si l'info est dans les sources
 - Jamais de généralités non sourcées
 - Jamais d'invention de source [Source X] qui n'existe pas dans le contexte
-- Jamais de conclusion qui reformule toute la réponse
-- Jamais de phrase "En conclusion" ou "En résumé" qui répète ce qui a déjà été dit
-- Jamais de citation d'une source dont le contenu n'a AUCUN rapport avec la question
+- Jamais de paraphrase redondante : ne reformule pas ce que tu viens de dire
 """
 
     USER_PROMPT_TEMPLATE = """DOCUMENTS DE RÉFÉRENCE :
@@ -73,37 +62,24 @@ SOURCES DISPONIBLES :
 QUESTION DU DPO :
 {question}
 
-Consigne : Réponds de manière concise et directe en utilisant EXCLUSIVEMENT les sources ci-dessus.
-- Lis TOUTES les sources avant de répondre. Si certaines sources se contredisent, c'est qu'elles parlent de cas différents : explique les conditions.
-- Commence par la réponse en 2-4 phrases maximum
-- Cite [Source X] après chaque fait (une seule source par fait suffit)
-- Ajoute des détails (listes, étapes) uniquement si la question le demande
-- Si les sources ne contiennent PAS l'information demandée, dis-le clairement sans forcer une citation non pertinente
-- Utilise **gras** pour les termes clés
+Consigne : Réponds de façon CONCISE en utilisant EXCLUSIVEMENT les informations ci-dessus. Cite [Source X] après chaque fait. Utilise des listes Markdown et **gras** pour les termes clés. Si l'information est absente des sources, indique-le en une phrase. Ne dépasse pas 300 mots sauf si la question demande explicitement une liste exhaustive.
 """
 
     def __init__(
         self,
         max_context_length: int = 32000,  # Chars (~8000 tokens, Nemo 128K mais on garde de la marge)
         include_metadata: bool = True,
-        llm_provider = None,  # Pour Map-Reduce si nécessaire
-        reverse_packing: bool = True,  # Ordre inversé (Lost in the Middle)
+        llm_provider = None  # Pour Map-Reduce si nécessaire
     ):
         """
         Args:
             max_context_length: Longueur max du contexte en caractères
             include_metadata: Inclure métadonnées dans le contexte
             llm_provider: Provider LLM pour résumés intelligents
-            reverse_packing: Si True, place les docs les plus pertinents en dernier
-                (exploite le recency bias). Si False, ordre naturel de pertinence.
-                Désactiver quand le reranker est actif — le reranker produit un ordre
-                optimal mais le reverse packing peut placer un faux positif en position
-                dominante (dernière = plus proche de la question).
         """
         self.max_context_length = max_context_length
         self.include_metadata = include_metadata
         self.llm_provider = llm_provider
-        self.reverse_packing = reverse_packing
     
     def build_context(
         self,
@@ -126,15 +102,15 @@ Consigne : Réponds de manière concise et directe en utilisant EXCLUSIVEMENT le
             documents: Documents récupérés par le retriever
             question: Question de l'utilisateur
             conversation_history: Historique optionnel [{role: str, content: str}]
-            reverse_packing_override: Si fourni, force l'ordre (True=inversé, False=naturel)
-                                     Sinon utilise self.reverse_packing
+            reverse_packing_override: Si True, force le reverse repacking (moins pertinent en premier).
+                Si False, force l'ordre naturel (plus pertinent en premier).
+                Si None, utilise le reverse repacking par défaut.
         
         Returns:
             Dict avec 'system', 'user', 'sources_metadata'
         """
         # 1. Construction du contexte documentaire
-        use_reverse = reverse_packing_override if reverse_packing_override is not None else self.reverse_packing
-        context_str = self._format_documents(documents, reverse_packing=use_reverse)
+        context_str = self._format_documents(documents, reverse_packing_override=reverse_packing_override)
         
         # 2. Gestion historique (si fourni)
         if conversation_history:
@@ -150,11 +126,7 @@ Consigne : Réponds de manière concise et directe en utilisant EXCLUSIVEMENT le
             # Map-Reduce : réponses partielles puis fusion
             if self.llm_provider:
                 logger.info("🔄 Map-Reduce : génération par batches puis fusion...")
-                try:
-                    context_str = self._map_reduce_context(documents, question)
-                except Exception as e:
-                    logger.error(f"❌ Map-Reduce échoué: {e}. Fallback troncature.")
-                    context_str = context_str[:self.max_context_length] + "\n\n[...contexte tronqué...]"
+                context_str = self._map_reduce_context(documents, question)
             else:
                 # Fallback: troncature simple
                 logger.warning("   ⚠️  Pas de LLM pour Map-Reduce, troncature simple")
@@ -168,7 +140,10 @@ Consigne : Réponds de manière concise et directe en utilisant EXCLUSIVEMENT le
             display = source_url or parent_url or doc.document_path
             file_type = doc.chunks[0].metadata.get('file_type', '') if doc.chunks else ''
             type_label = f" ({file_type.upper()})" if file_type else ''
-            sources_list.append(f"[Source {i}] {doc.primary_nature}{type_label} - {display[:100]}")
+            # Tag origine : [CNIL] ou [Interne]
+            source_origin = doc.chunks[0].metadata.get('source', 'CNIL') if doc.chunks else 'CNIL'
+            origin_tag = '[Interne]' if source_origin == 'ENTREPRISE' else '[CNIL]'
+            sources_list.append(f"[Source {i}] {origin_tag} {doc.primary_nature}{type_label} - {display[:100]}")
         
         user_prompt = self.USER_PROMPT_TEMPLATE.format(
             context=context_str,
@@ -380,44 +355,38 @@ Extraction (max 400 chars, conserve listes/étapes):"""
         logger.info(f"   ✅ Contexte résumé: {len(result)} chars (vs {self.max_context_length} max)")
         return result
     
-    def _format_documents(self, documents: List, reverse_packing: Optional[bool] = None) -> str:
+    def _format_documents(self, documents: List, reverse_packing_override: Optional[bool] = None) -> str:
         """
         Formate les documents pour le contexte.
         
-        Deux modes d'ordre :
-        - reverse_packing=True : Lost in the Middle — docs les moins pertinents
-          en premier, les plus pertinents en dernier (recency bias). Utile sans reranker.
-        - reverse_packing=False : Ordre naturel de pertinence (Source 1 en premier).
-          Recommandé avec reranker — évite qu'un faux positif contextuel #1
-          domine en position finale.
-        
-        Les numéros de source [Source N] sont attribués par rang de pertinence
-        (Source 1 = le plus pertinent). Les scores de pertinence ne sont PAS
-        affichés au LLM pour éviter le biais numérique.
+        Reverse repacking : les documents les MOINS pertinents sont placés
+        en premier, les PLUS pertinents en dernier (proches de la question).
+        Cela exploite le biais de récence des LLMs pour maximiser la précision.
         
         Args:
-            documents: Documents à formater
-            reverse_packing: Override l'ordre. Si None, utilise self.reverse_packing.
+            documents: Documents triés par pertinence décroissante
+            reverse_packing_override: True = reverse (défaut), False = ordre naturel
+        
+        Les numéros de source [Source N] sont attribués par rang de pertinence
+        (Source 1 = le plus pertinent) mais l'ORDRE d'apparition dépend du mode.
         """
-        use_reverse = reverse_packing if reverse_packing is not None else self.reverse_packing
         formatted_parts = []
+        
+        # Déterminer l'ordre de présentation
+        use_reverse = reverse_packing_override if reverse_packing_override is not None else True
+        
+        n_docs = len(documents)
         
         # Créer la liste (source_num, doc)
         indexed_docs = list(enumerate(documents, 1))  # [(1, doc1), (2, doc2), ...]
-        
         if use_reverse:
-            # Reverse repacking : les docs les MOINS pertinents en premier,
-            # les PLUS pertinents en dernier (proches de la question).
-            # Exploite le biais de récence des LLMs.
-            ordered_docs = list(reversed(indexed_docs))
-        else:
-            # Ordre naturel : Source 1 (plus pertinent) en premier.
-            # Plus sûr quand le reranker est actif — évite qu'un faux positif
-            # contextuel en position #1 domine via le recency bias.
-            ordered_docs = indexed_docs
+            indexed_docs = list(reversed(indexed_docs))  # [(N, docN), ..., (1, doc1)]
         
-        for source_num, doc in ordered_docs:
-            parts = [f"[Source {source_num}] {doc.primary_nature}"]
+        for source_num, doc in indexed_docs:
+            # Tag origine : [CNIL] ou [Interne]
+            source_origin = doc.chunks[0].metadata.get('source', 'CNIL') if doc.chunks else 'CNIL'
+            origin_tag = '[Interne]' if source_origin == 'ENTREPRISE' else '[CNIL]'
+            parts = [f"[Source {source_num}] {origin_tag} {doc.primary_nature}"]
             
             if self.include_metadata:
                 # URL source : priorité source_url > parent_url > document_path
@@ -434,9 +403,7 @@ Extraction (max 400 chars, conserve listes/étapes):"""
                 if title:
                     parts.append(f"Description: {title[:150]}")
                 
-                # NOTE: Score de pertinence retiré du contexte LLM.
-                # Le LLM ne doit pas être biaisé par les scores numériques
-                # — il doit juger sur le contenu des sources.
+                parts.append(f"Score pertinence: {doc.avg_similarity:.2f}")
             
             parts.append("")  # Ligne vide
             
@@ -494,12 +461,14 @@ Extraction (max 400 chars, conserve listes/étapes):"""
             file_type = doc.chunks[0].metadata.get('file_type', '') if doc.chunks else ''
             title = doc.chunks[0].metadata.get('title', '') if doc.chunks else ''
             
+            source_origin = doc.chunks[0].metadata.get('source', 'CNIL') if doc.chunks else 'CNIL'
             source_info = {
                 "id": i,
                 "document_path": doc.document_path,
                 "source_url": display_url,  # URL CNIL ou path Entreprise
                 "parent_url": parent_url,  # Page CNIL référençant ce doc
                 "nature": doc.primary_nature,
+                "origin": source_origin,  # CNIL ou ENTREPRISE
                 "file_type": file_type,
                 "title": title,
                 "avg_similarity": doc.avg_similarity,
@@ -595,6 +564,7 @@ Extraction (max 400 chars, conserve listes/étapes):"""
                     "url": source.get("source_url", source["document_path"]),
                     "parent_url": source.get("parent_url", ""),
                     "nature": source["nature"],
+                    "origin": source.get("origin", "CNIL"),
                     "file_type": source.get("file_type", ""),
                     "title": source.get("title", ""),
                     "score": source["avg_similarity"],
@@ -624,6 +594,7 @@ Extraction (max 400 chars, conserve listes/étapes):"""
                     "url": source.get("source_url", source["document_path"]),
                     "parent_url": source.get("parent_url", ""),
                     "nature": source["nature"],
+                    "origin": source.get("origin", "CNIL"),
                     "file_type": source.get("file_type", ""),
                     "title": source.get("title", ""),
                     "score": source["avg_similarity"],
@@ -652,13 +623,11 @@ Extraction (max 400 chars, conserve listes/étapes):"""
 def create_context_builder(
     max_context_length: int = 6500,
     include_metadata: bool = True,
-    llm_provider = None,
-    reverse_packing: bool = True,
+    llm_provider = None
 ) -> ContextBuilder:
     """Factory function pour créer un context builder"""
     return ContextBuilder(
         max_context_length=max_context_length,
         include_metadata=include_metadata,
-        llm_provider=llm_provider,
-        reverse_packing=reverse_packing,
+        llm_provider=llm_provider
     )

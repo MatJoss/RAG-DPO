@@ -8,6 +8,7 @@ Architecture clé en main :
 - Grounding Validation
 """
 import streamlit as st
+import json
 import sys
 import logging
 from pathlib import Path
@@ -19,6 +20,7 @@ sys.path.insert(0, str(project_root / "src"))
 
 import chromadb
 from src.utils.llm_provider import OllamaProvider
+from src.utils.embedding_provider import EmbeddingProvider
 from src.rag.pipeline import create_pipeline
 
 
@@ -88,9 +90,15 @@ def init_rag_system():
             model="mistral-nemo"
         )
 
+        # Embedding provider BGE-M3 (FP16, GPU, 1024 dims)
+        embedding_provider = EmbeddingProvider(
+            cache_dir=str(project_root / "models" / "huggingface" / "hub"),
+        )
+
         pipeline = create_pipeline(
             collection=collection,
             llm_provider=llm_provider,
+            embedding_provider=embedding_provider,
             # Retrieval
             n_documents=5,
             n_chunks_per_doc=3,
@@ -129,6 +137,19 @@ def render_source_card(source):
     else:
         source_line = f'📁 {url}'
 
+    # Badge origine : CNIL ou Interne
+    origin = source.get('origin', 'CNIL')
+    if origin == 'ENTREPRISE':
+        origin_badge = (
+            ' <span style="background:rgba(255,165,0,0.3);padding:1px 6px;'
+            'border-radius:3px;font-size:0.8em">📋 Interne</span>'
+        )
+    else:
+        origin_badge = (
+            ' <span style="background:rgba(0,128,255,0.2);padding:1px 6px;'
+            'border-radius:3px;font-size:0.8em">🏛️ CNIL</span>'
+        )
+
     type_badge = ''
     if file_type:
         type_badge = (
@@ -144,7 +165,7 @@ def render_source_card(source):
         location_line = '<br>📍 ' + ' | '.join(loc[:80] for loc in locations[:3])
 
     return f"""<div class="source-card {cited_class}">
-        <strong>{cited_icon} Source {source['id']} - {source['nature']}{type_badge}</strong>
+        <strong>{cited_icon} Source {source['id']} - {source['nature']}{origin_badge}{type_badge}</strong>
         <div class="metadata">
             {source_line}{title_line}{location_line}<br>
             📊 Score : {source['score']:.3f}
@@ -188,6 +209,41 @@ def main():
             ["DOCTRINE", "GUIDE", "SANCTION", "TECHNIQUE"],
             default=[]
         )
+        
+        # Filtre tags entreprise
+        tags_registry_path = project_root / "configs" / "enterprise_tags.json"
+        enterprise_tag_options = []
+        tag_labels = {}
+        default_tags = []
+        if tags_registry_path.exists():
+            with open(tags_registry_path, 'r', encoding='utf-8') as f:
+                tags_registry = json.load(f)
+            enterprise_tag_options = tags_registry.get('active_tags', [])
+            tag_labels = tags_registry.get('labels', {})
+            default_tags = [
+                t for t in tags_registry.get('default_tags', [])
+                if t in enterprise_tag_options
+            ]
+        
+        selected_enterprise_tags = []
+        if enterprise_tag_options:
+            st.subheader("🏷️ Documents internes")
+            # Afficher les labels lisibles dans le multiselect
+            display_options = [
+                tag_labels.get(t, t) for t in enterprise_tag_options
+            ]
+            display_defaults = [
+                tag_labels.get(t, t) for t in default_tags
+            ]
+            selected_display = st.multiselect(
+                "Catégories à inclure",
+                display_options,
+                default=display_defaults,
+                help="Sélectionnez les types de documents internes à consulter (CNIL est toujours inclus)"
+            )
+            # Reconvertir labels → tags techniques
+            label_to_tag = {tag_labels.get(t, t): t for t in enterprise_tag_options}
+            selected_enterprise_tags = [label_to_tag[d] for d in selected_display]
 
         # Profondeur de recherche
         st.subheader("📥 Profondeur")
@@ -273,6 +329,7 @@ def main():
                     response = st.session_state.pipeline.query(
                         question=prompt,
                         where_filter=where_filter,
+                        enterprise_tags=selected_enterprise_tags or None,
                         conversation_history=st.session_state.conversation_history,
                         n_documents=params["n_documents"],
                         n_chunks_per_doc=params["n_chunks_per_doc"],
@@ -314,7 +371,7 @@ def main():
 
     # Footer
     st.markdown("---")
-    st.caption("🔒 RAG-DPO Assistant — Sources CNIL officielles — mistral-nemo 12B — 100% local")
+    st.caption("🔒 RAG-DPO Assistant — Sources CNIL + documents internes — mistral-nemo 12B — 100% local")
 
 
 if __name__ == "__main__":

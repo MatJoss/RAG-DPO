@@ -71,7 +71,7 @@ STEPS = {
         'name': 'Phase 6A : Indexation ChromaDB (reset)',
         'script': 'src/processing/create_chromadb_index.py',
         'args': ['--mode', 'reset'],
-        'description': 'Génère embeddings nomic-embed-text et indexe dans ChromaDB',
+        'description': 'Génère embeddings BGE-M3 et indexe dans ChromaDB',
     },
     '6b': {
         'name': 'Phase 6B : Génération résumés structurés (Nemo)',
@@ -539,7 +539,7 @@ Exemples :
     print("=" * 70)
     print("  RECONSTRUCTION PIPELINE RAG-DPO")
     print("  Modèle: mistral-nemo (12B, 128K ctx)")
-    print("  Embeddings: nomic-embed-text (768 dim)")
+    print("  Embeddings: BAAI/bge-m3 (1024 dim)")
     if args.test:
         print(f"  MODE TEST: {args.test} documents max")
     if args.fresh:

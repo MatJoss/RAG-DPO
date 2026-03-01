@@ -16,7 +16,7 @@ from chromadb.config import Settings
 project_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(project_root / 'src' / 'utils'))
 
-from llm_provider import RAGConfig
+from embedding_provider import EmbeddingProvider
 
 logging.basicConfig(
     level=logging.INFO,
@@ -46,13 +46,14 @@ class ChromaDBIndexer:
         self.chroma_client = None
         self.collection = None
         
-        # Embeddings
+        # Embeddings — BGE-M3 via sentence-transformers
         try:
-            config = RAGConfig()
-            self.llm_provider = config.llm_provider
-            logger.info(f"✅ Provider LLM initialisé pour embeddings")
+            self.embedding_provider = EmbeddingProvider(
+                cache_dir=str(self.project_root / 'models' / 'huggingface' / 'hub'),
+            )
+            logger.info(f"✅ EmbeddingProvider initialisé ({self.embedding_provider.model_name})")
         except Exception as e:
-            logger.error(f"❌ Erreur init provider: {e}")
+            logger.error(f"❌ Erreur init EmbeddingProvider: {e}")
             raise
         
         # Cache URLs (document_path -> url)
@@ -287,10 +288,10 @@ class ChromaDBIndexer:
         return False
     
     def generate_embeddings(self, texts: List[str]) -> List[List[float]]:
-        """Génère les embeddings pour une liste de textes"""
+        """Génère les embeddings pour une liste de textes via BGE-M3"""
         
         try:
-            embeddings = self.llm_provider.embed(texts)
+            embeddings = self.embedding_provider.embed(texts)
             return embeddings
         except Exception as e:
             logger.error(f"Erreur génération embeddings: {e}")
@@ -326,8 +327,7 @@ class ChromaDBIndexer:
                 else:
                     full_text = text
                 
-                # Sécurité : tronquer si dépasse (ne devrait pas arriver avec chunks < 450 mots)
-                documents.append(full_text[:2500])
+                documents.append(full_text)
                 
                 # Metadata pour filtrage
                 doc_path = chunk.get('document_path', '')
@@ -399,8 +399,8 @@ class ChromaDBIndexer:
         # Test 1 : Query simple
         logger.info(f"\n📋 Test 1 : Query simple - 'Comment faire une AIPD ?'")
         
-        # Générer embedding avec Ollama (DOIT utiliser le même modèle que l'indexation)
-        query_embedding = self.llm_provider.embed(["Comment faire une AIPD ?"])[0]
+        # Générer embedding avec BGE-M3 (même modèle que l'indexation)
+        query_embedding = self.embedding_provider.embed(["Comment faire une AIPD ?"])[0]
         
         results1 = self.collection.query(
             query_embeddings=[query_embedding],  # Utiliser embedding Ollama, pas query_texts

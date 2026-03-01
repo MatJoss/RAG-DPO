@@ -108,6 +108,7 @@ class RAGRetriever:
         self,
         collection,
         llm_provider,
+        embedding_provider=None,
         summary_bm25_index=None,
         chunk_bm25_index=None,
         query_expander: Optional[QueryExpander] = None,
@@ -121,7 +122,8 @@ class RAGRetriever:
         """
         Args:
             collection: Collection ChromaDB
-            llm_provider: Provider pour embeddings
+            llm_provider: Provider LLM (génération, chat)
+            embedding_provider: Provider d'embeddings (BGE-M3). Si None, fallback sur llm_provider.embed()
             summary_bm25_index: Index BM25 sur les summaries (pré-filtrage)
             chunk_bm25_index: Index BM25 sur les chunks (sparse retrieval)
             query_expander: QueryExpander pour multi-query retrieval (optionnel)
@@ -134,6 +136,7 @@ class RAGRetriever:
         """
         self.collection = collection
         self.llm_provider = llm_provider
+        self.embedding_provider = embedding_provider
         self.summary_bm25 = summary_bm25_index
         self.chunk_bm25 = chunk_bm25_index
         self.query_expander = query_expander
@@ -143,6 +146,12 @@ class RAGRetriever:
         self.summary_prefilter_k = summary_prefilter_k
         self.enable_hybrid = enable_hybrid
         self.enable_summary_prefilter = enable_summary_prefilter
+    
+    def _embed(self, texts: List[str]) -> List[List[float]]:
+        """Génère des embeddings via le provider dédié ou fallback LLM."""
+        if self.embedding_provider is not None:
+            return self.embedding_provider.embed(texts)
+        return self.llm_provider.embed(texts)
     
     def retrieve(
         self,
@@ -200,7 +209,7 @@ class RAGRetriever:
             q_weight = 2.0 if q_idx == 0 else 1.0  # Query originale pèse 2× plus
             
             # 2a. Semantic search (dense) via ChromaDB
-            query_embedding = self.llm_provider.embed([q])[0]
+            query_embedding = self._embed([q])[0]
             
             try:
                 semantic_results = self.collection.query(
@@ -365,7 +374,7 @@ class RAGRetriever:
             q_weight = 2.0 if q_idx == 0 else 1.0
             
             # 2a. Semantic search (dense) — fetch plus large
-            query_embedding = self.llm_provider.embed([q])[0]
+            query_embedding = self._embed([q])[0]
             
             try:
                 semantic_results = self.collection.query(
@@ -575,7 +584,7 @@ class RAGRetriever:
         where_filter: Optional[Dict[str, Any]] = None
     ) -> List[RetrievedChunk]:
         """Version simple : top K chunks sans déduplication (debug)."""
-        query_embedding = self.llm_provider.embed([query])[0]
+        query_embedding = self._embed([query])[0]
         
         results = self.collection.query(
             query_embeddings=[query_embedding],
@@ -622,6 +631,7 @@ class RAGRetriever:
 def create_retriever(
     collection,
     llm_provider,
+    embedding_provider=None,
     summary_bm25_index=None,
     chunk_bm25_index=None,
     query_expander: Optional[QueryExpander] = None,
@@ -635,6 +645,7 @@ def create_retriever(
     return RAGRetriever(
         collection=collection,
         llm_provider=llm_provider,
+        embedding_provider=embedding_provider,
         summary_bm25_index=summary_bm25_index,
         chunk_bm25_index=chunk_bm25_index,
         query_expander=query_expander,

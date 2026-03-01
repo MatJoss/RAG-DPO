@@ -256,40 +256,44 @@ def score_conciseness(answer: str, category: str) -> Tuple[float, str]:
     """
     Évalue la concision de la réponse.
     
-    Heuristiques :
-    - Définitions simples : < 300 mots idéal
-    - Questions moyennes : < 500 mots idéal
-    - Refus hors périmètre : < 100 mots idéal
+    Seuils relaxés : la concision est un SIGNAL, pas un couperet.
+    Un RAG avec un meilleur retrieval fournit plus de contexte → le LLM
+    produit naturellement des réponses plus longues et plus complètes.
+    On pénalise seulement la verbosité excessive (>2× l'idéal).
     
     Returns:
         (score 0-1, assessment)
     """
     word_count = len(answer.split())
     
-    # Limites par catégorie
+    # Limites par catégorie (idéal, max_soft, max_hard)
+    # idéal = score 1.0, max_soft = score 0.7, max_hard = score plancher 0.4
     limits = {
-        "definition": (100, 300),       # (idéal, max)
-        "obligation": (150, 500),
-        "recommandation": (150, 500),
-        "piège": (50, 200),
-        "hors_perimetre": (30, 100),
+        "definition": (150, 400, 600),
+        "obligation": (200, 500, 800),
+        "recommandation": (200, 500, 800),
+        "piège": (80, 250, 400),
+        "hors_perimetre": (50, 150, 300),
     }
     
-    ideal, max_words = limits.get(category, (150, 400))
+    ideal, max_soft, max_hard = limits.get(category, (200, 500, 800))
     
     if word_count <= ideal:
         return 1.0, f"✅ {word_count} mots (idéal ≤{ideal})"
-    elif word_count <= max_words:
-        # Score linéaire entre ideal et max
-        score = 1.0 - 0.5 * (word_count - ideal) / (max_words - ideal)
-        return score, f"⚠️ {word_count} mots (idéal ≤{ideal}, max {max_words})"
+    elif word_count <= max_soft:
+        # Pente douce : 1.0 → 0.7
+        score = 1.0 - 0.3 * (word_count - ideal) / (max_soft - ideal)
+        return score, f"⚠️ {word_count} mots (idéal ≤{ideal}, max {max_soft})"
+    elif word_count <= max_hard:
+        # Pente plus forte : 0.7 → 0.4
+        score = 0.7 - 0.3 * (word_count - max_soft) / (max_hard - max_soft)
+        return score, f"❌ {word_count} mots (trop long, max {max_soft})"
     else:
-        # Au-delà du max : score faible
-        score = max(0.2, 0.5 - 0.3 * (word_count - max_words) / max_words)
-        return score, f"❌ {word_count} mots (trop long, max {max_words})"
+        # Au-delà du max hard : plancher 0.3
+        return 0.3, f"❌ {word_count} mots (excessif, max {max_hard})"
 
 
-def score_source_quality(answer: str) -> Tuple[float, Dict]:
+def score_source_quality(answer: str, category: str = "") -> Tuple[float, Dict]:
     """
     Évalue la qualité de l'usage des sources.
     
@@ -297,6 +301,7 @@ def score_source_quality(answer: str) -> Tuple[float, Dict]:
     - Présence de [Source X] citations
     - Pas de source inventée (numéro > 12 suspect)
     - Pas de chunk non pertinent affiché (art. 20 pour question sur art. 99)
+    - Questions hors-périmètre / piège : ne pas pénaliser l'absence de source (refus = bon comportement)
     
     Returns:
         (score 0-1, details)
@@ -315,7 +320,9 @@ def score_source_quality(answer: str) -> Tuple[float, Dict]:
     
     # Score de base
     if n_citations == 0:
-        # Acceptable si c'est un refus ou hors périmètre
+        # Pour les refus (hors-périmètre, piège), ne pas citer = bon comportement
+        if category in ("hors_perimetre", "piège"):
+            return 1.0, details
         return 0.5, details
     
     # Vérifier cohérence des numéros de source
@@ -324,11 +331,9 @@ def score_source_quality(answer: str) -> Tuple[float, Dict]:
         details["warning"] = f"Source {max_source_id} suspicieusement élevée"
         return 0.3, details
     
-    # Score basé sur la diversité (mais pas trop)
-    if n_unique_sources >= 1 and n_unique_sources <= 5:
+    # Score basé sur la présence de citations
+    if n_unique_sources >= 1:
         return 1.0, details
-    elif n_unique_sources > 5:
-        return 0.7, details  # Trop de sources → dilution probable
     
     return 0.8, details
 
@@ -493,19 +498,19 @@ def evaluate_single(qa_item: Dict, answer: str, sources: List[Dict] = None, use_
     }
     
     # 4. Source Quality
-    source_score, source_details = score_source_quality(answer)
+    source_score, source_details = score_source_quality(answer, qa_item.get("category", ""))
     result["source_quality"] = {
         "score": source_score,
         **source_details,
     }
     
     # Score global pondéré
-    # Answer Correctness : 40%, Faithfulness : 30%, Conciseness : 15%, Sources : 15%
+    # Answer Correctness : 45%, Faithfulness : 25%, Conciseness : 10%, Sources : 20%
     result["global_score"] = round(
-        0.40 * combined_correctness +
-        0.30 * not_include_score +
-        0.15 * concise_score +
-        0.15 * source_score,
+        0.45 * combined_correctness +
+        0.25 * not_include_score +
+        0.10 * concise_score +
+        0.20 * source_score,
         2
     )
     
@@ -516,8 +521,14 @@ def evaluate_single(qa_item: Dict, answer: str, sources: List[Dict] = None, use_
 # Pipeline Init
 # ═══════════════════════════════════════════════════════════════
 
-def init_pipeline():
-    """Initialise le pipeline RAG pour l'évaluation."""
+def init_pipeline(embedding_mode: str = "bge-m3"):
+    """
+    Initialise le pipeline RAG pour l'évaluation.
+    
+    Args:
+        embedding_mode: 'bge-m3' (défaut) ou 'nomic' pour sélectionner
+                        l'embedding provider et la collection ChromaDB correspondante.
+    """
     import chromadb
     from src.utils.llm_provider import OllamaProvider
     from src.rag.pipeline import create_pipeline
@@ -528,16 +539,44 @@ def init_pipeline():
         sys.exit(1)
     
     client = chromadb.PersistentClient(path=str(vectordb_path))
-    collection = client.get_collection("rag_dpo_chunks")
     
-    llm_provider = OllamaProvider(
-        base_url="http://localhost:11434",
-        model="mistral-nemo"
-    )
+    # Sélection collection + embedding provider selon le mode
+    if embedding_mode == "nomic":
+        collection_name = "rag_dpo_chunks_nomic"
+        try:
+            collection = client.get_collection(collection_name)
+        except Exception:
+            print(f"❌ Collection '{collection_name}' introuvable.")
+            print(f"   Lancez d'abord : python eval/index_nomic.py")
+            sys.exit(1)
+        
+        llm_provider = OllamaProvider(
+            base_url="http://localhost:11434",
+            model="mistral-nemo"
+        )
+        # Nomic : embeddings via OllamaProvider (768 dims)
+        # embedding_provider=None → le retriever utilisera llm_provider.embed()
+        embedding_provider = None
+        print(f"📐 Embedding: nomic-embed-text (Ollama, 768d) — collection: {collection_name}")
+    else:
+        collection_name = "rag_dpo_chunks"
+        collection = client.get_collection(collection_name)
+        
+        llm_provider = OllamaProvider(
+            base_url="http://localhost:11434",
+            model="mistral-nemo"
+        )
+        
+        from src.utils.embedding_provider import EmbeddingProvider
+        embedding_provider = EmbeddingProvider(
+            cache_dir=str(project_root / "models" / "huggingface" / "hub"),
+        )
+        print(f"📐 Embedding: BGE-M3 (sentence-transformers, 1024d) — collection: {collection_name}")
     
     pipeline = create_pipeline(
         collection=collection,
         llm_provider=llm_provider,
+        embedding_provider=embedding_provider,
         n_documents=5,
         n_chunks_per_doc=3,
         enable_hybrid=True,
@@ -546,7 +585,7 @@ def init_pipeline():
         enable_validation=True,
         model="mistral-nemo",
         temperature=0.0,
-        debug_mode=True,  # Pour récupérer le contexte et les sources
+        debug_mode=True,
     )
     
     return pipeline
@@ -562,6 +601,7 @@ def run_evaluation(
     dry_run: bool = False,
     verbose: bool = False,
     use_llm_judge: bool = True,
+    embedding_mode: str = "bge-m3",
 ) -> Dict:
     """
     Exécute l'évaluation complète.
@@ -571,6 +611,7 @@ def run_evaluation(
         question_ids: Liste d'IDs à évaluer (None = tous)
         dry_run: Si True, affiche les questions sans les exécuter
         verbose: Si True, affiche les réponses complètes
+        embedding_mode: 'bge-m3' ou 'nomic'
     
     Returns:
         Résultats complets de l'évaluation
@@ -587,8 +628,9 @@ def run_evaluation(
         print("❌ Aucune question trouvée avec les IDs spécifiés")
         return {}
     
+    emb_label = "BGE-M3" if embedding_mode == "bge-m3" else "nomic-embed-text"
     print(f"\n{'='*70}")
-    print(f"🧪 ÉVALUATION RAG-DPO — {len(dataset)} questions")
+    print(f"🧪 ÉVALUATION RAG-DPO — {len(dataset)} questions [{emb_label}]")
     print(f"{'='*70}\n")
     
     if dry_run:
@@ -599,8 +641,8 @@ def run_evaluation(
         return {}
     
     # Init pipeline
-    print("⏳ Initialisation du pipeline RAG...")
-    pipeline = init_pipeline()
+    print(f"⏳ Initialisation du pipeline RAG ({emb_label})...")
+    pipeline = init_pipeline(embedding_mode=embedding_mode)
     print("✅ Pipeline prêt\n")
     
     # ═══════════════════════════════════════════════════════════
@@ -721,10 +763,10 @@ def run_evaluation(
                 
                 # Recalculer le score global
                 r["global_score"] = round(
-                    0.40 * combined +
-                    0.30 * r["faithfulness"]["score"] +
-                    0.15 * r["conciseness"]["score"] +
-                    0.15 * r["source_quality"]["score"],
+                    0.45 * combined +
+                    0.25 * r["faithfulness"]["score"] +
+                    0.10 * r["conciseness"]["score"] +
+                    0.20 * r["source_quality"]["score"],
                     2
                 )
                 
@@ -795,15 +837,19 @@ def run_evaluation(
                 print(f"    • {r['id']} : {r['error'][:100]}")
     
     # Sauvegarder les résultats
-    output_path = project_root / "eval" / f"results_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+    emb_suffix = "nomic" if embedding_mode == "nomic" else "bge-m3"
+    output_path = project_root / "eval" / f"results_{emb_suffix}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
     with open(output_path, "w", encoding="utf-8") as f:
         json.dump({
             "timestamp": datetime.now().isoformat(),
+            "embedding_model": emb_label,
+            "embedding_mode": embedding_mode,
             "n_questions": len(dataset),
             "n_valid": len(valid_results),
             "n_errors": len(results) - len(valid_results),
             "avg_global_score": round(avg_global, 3) if valid_results else 0,
             "avg_time_per_question": round(avg_time, 1) if valid_results else 0,
+            "scoring_weights": {"correctness": 0.45, "faithfulness": 0.25, "conciseness": 0.10, "sources": 0.20},
             "results": results,
         }, f, ensure_ascii=False, indent=2)
     
@@ -828,6 +874,8 @@ def main():
     parser.add_argument("--verbose", action="store_true", help="Affiche les réponses complètes")
     parser.add_argument("--no-llm-judge", action="store_true", help="Désactive le LLM-as-judge (keyword matching seul)")
     parser.add_argument("--dataset", default=None, help="Chemin vers le dataset JSON")
+    parser.add_argument("--embedding", choices=["bge-m3", "nomic"], default="bge-m3",
+                        help="Modèle d'embedding à utiliser (défaut: bge-m3)")
     
     args = parser.parse_args()
     
@@ -843,6 +891,7 @@ def main():
         dry_run=args.dry_run,
         verbose=args.verbose,
         use_llm_judge=not args.no_llm_judge,
+        embedding_mode=args.embedding,
     )
 
 

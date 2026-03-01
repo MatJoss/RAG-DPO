@@ -14,6 +14,7 @@ sys.path.insert(0, str(project_root / "src"))
 
 import chromadb
 from src.utils.llm_provider import OllamaProvider
+from src.utils.embedding_provider import EmbeddingProvider
 from src.rag.pipeline import create_pipeline
 
 
@@ -119,11 +120,17 @@ def main():
     )
     logger.info("✅ Ollama prêt\n")
     
+    # 2b. Init Embedding Provider (BGE-M3)
+    embedding_provider = EmbeddingProvider(
+        cache_dir=str(project_root / "models" / "huggingface" / "hub"),
+    )
+    
     # 3. Init Pipeline
     logger.info(f"🔧 Configuration pipeline (docs={args.n_documents}, chunks={args.n_chunks})...")
     pipeline = create_pipeline(
         collection=collection,
         llm_provider=llm_provider,
+        embedding_provider=embedding_provider,
         n_documents=args.n_documents,
         n_chunks_per_doc=args.n_chunks,
         model=args.model,

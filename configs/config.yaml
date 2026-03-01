@@ -20,8 +20,13 @@ processing:
     - fr
 
 embeddings:
-  model_local: "nomic-embed-text"  # Via Ollama, 768 dimensions
-  model_hybrid: "mistral-embed"
+  model: "BAAI/bge-m3"           # sentence-transformers, 1024 dims, multilingual
+  dims: 1024                      # Dimensions des embeddings
+  device: "cuda"                  # GPU (FP16, ~1.07 GB VRAM)
+  batch_size: 64                  # Batch size pour encoding
+  # Legacy (conservé pour référence)
+  # model_local: "nomic-embed-text"  # Ancien: Ollama, 768 dims, anglais seul
+  # model_hybrid: "mistral-embed"
   
 llm:
   local:
@@ -33,6 +38,12 @@ llm:
     model: "mistral-small-latest"
     temperature: 0.1
     max_tokens: 4096
+
+enterprise:
+  # Registre des tags : voir configs/enterprise_tags.json (MAJ auto à chaque ingestion)
+  # default_tags : tags toujours inclus dans la recherche (même si non sélectionnés)
+  # active_tags : tags réellement indexés (calculé automatiquement)
+  # labels : noms affichés dans l'UI (personnalisable)
 
 rag:
   # Retrieval

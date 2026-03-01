@@ -14,11 +14,95 @@
 | **4** | 📊 Observabilité (logs, feedback, dashboard) | 2-3j | ✅ Done |
 | **5** | 🐳 Docker (on package le produit fini) | 2-3j | 🔲 |
 | **5b** | 🔄 Init & Update CNIL (routine mensuelle) | 1j | ✅ Done |
-| **6** | 🕸️ Graph RAG (LightRAG) | 2 sem | 🔲 v2 |
+| **6** | 🧠 Intent-Aware Pipeline (assistant structuré) | 2-3j | 🔨 En cours |
+| **7** | 🕸️ Graph RAG (LightRAG) | 2 sem | 🔲 v2 |
 
 ---
 
-## 🚀 PROCHAINE ÉTAPE : Migration BGE-M3
+## 🧠 Prio 6 — Intent-Aware Pipeline
+
+### Diagnostic
+Le RAG actuel est un **moteur documentaire** : il assemble des chunks sans raisonnement transversal.
+Quand la question est méthodologique ou organisationnelle (ex: "Comment mener une AIPD ?"),
+le modèle ne peut que réciter les sources sans structurer de démarche opérationnelle.
+
+Le system prompt actuel **interdit** au LLM d'utiliser ses connaissances RGPD générales :
+> "Tu réponds UNIQUEMENT à partir des sources fournies"
+
+C'est correct pour les questions factuelles, mais destructeur pour les questions méthodologiques.
+
+### Contrainte hardware
+- RTX 4070 Ti : 12 GB VRAM
+- Budget actuel : Mistral-Nemo ~8 GB + BGE-M3 ~1 GB + Jina (CPU) = ~9 GB
+- **Pas de place pour un 2ème modèle GPU**
+- Solution : dual-pass sur le **même** Mistral-Nemo (0 VRAM supplémentaire)
+
+### Architecture cible
+
+```
+Question DPO
+    ↓
+┌─────────────────────────────────────────────┐
+│ PHASE 0 — Intent Classification (Nemo)      │
+│ 1 appel LLM, prompt court → JSON            │
+│ ~0.3-0.5s, ~100 tokens                      │
+│                                             │
+│ Sortie :                                    │
+│   intent: factuel | methodologique |        │
+│           organisationnel | comparaison |   │
+│           cas_pratique | liste_exhaustive   │
+│   scope_international: true/false           │
+│   needs_methodology: true/false             │
+│   expected_structure: steps|list|comparison │
+│   topics: [aipd, transfert, violation...]   │
+└──────────────┬──────────────────────────────┘
+               ↓
+       [Phases 1-6 existantes]
+       Seul changement : le system prompt
+       est sélectionné selon l'intent
+```
+
+### Plan d'implémentation
+
+#### Étape 1 : Intent Classifier (`src/rag/intent_classifier.py`) — NOUVEAU
+- [ ] Créer le module `IntentClassifier`
+- [ ] Prompt court → JSON structuré
+- [ ] 6 classes d'intent
+- [ ] Détection dimension internationale, besoin méthodologique
+- [ ] Topics détectés
+- [ ] Fallback gracieux : parsing JSON échoué → intent=factuel
+- [ ] Temps cible : <1s
+
+#### Étape 2 : Prompts adaptatifs (`src/rag/context_builder.py`) — MODIFIÉ
+- [ ] Garder SYSTEM_PROMPT actuel comme `SYSTEM_PROMPT_FACTUEL`
+- [ ] Ajouter prompts méthodologique, organisationnel, cas_pratique, comparaison, liste
+- [ ] Adapter USER_PROMPT_TEMPLATE avec instruction anti-dérive conditionnelle
+- [ ] `build_context()` reçoit l'intent et sélectionne le bon prompt
+- [ ] Distinction [Source X] vs [Connaissance RGPD] dans prompts méthodologiques
+
+#### Étape 3 : Intégration pipeline (`src/rag/pipeline.py`) — MODIFIÉ
+- [ ] IntentClassifier dans `RAGPipeline.__init__()`
+- [ ] Appeler classify() en phase 0 AVANT retrieval
+- [ ] Passer intent au context_builder
+- [ ] Logger l'intent (structured logging)
+- [ ] Ajouter intent dans RAGResponse
+- [ ] create_pipeline() instancie l'IntentClassifier
+
+#### Étape 4 : Validation
+- [ ] Test unitaire : 10 questions → intent correct
+- [ ] Test e2e : question AIPD → réponse structurée
+- [ ] Benchmark comparatif avant/après
+- [ ] Vérifier latence <1s ajoutée
+- [ ] Vérifier pas de régression factuelles
+
+### Coût
+- +1 appel LLM/question (~0.3-0.5s, ~100 tokens)
+- 0 VRAM supplémentaire
+- 0 dépendance nouvelle
+
+---
+
+## 🚀 Migration BGE-M3 (TERMINÉE)
 
 ### Objectif
 Remplacer nomic-embed-text (anglais seul, 137M) par BGE-M3 (multilingue, 568M, dense+sparse intégré).

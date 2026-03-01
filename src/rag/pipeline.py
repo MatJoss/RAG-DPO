@@ -21,6 +21,7 @@ from .context_builder import ContextBuilder
 from .generator import Generator
 from .validators import RelevanceValidator, GroundingValidator
 from .reranker import CrossEncoderReranker, RankedChunk
+from .intent_classifier import IntentClassifier, QuestionIntent
 
 logger = logging.getLogger(__name__)
 
@@ -85,6 +86,9 @@ class RAGResponse:
     retrieved_documents: Optional[List] = None
     context_used: Optional[str] = None
     
+    # Intent classifié
+    intent: Optional[QuestionIntent] = None
+    
     # Erreur éventuelle
     error: Optional[str] = None
 
@@ -107,6 +111,7 @@ class RAGPipeline:
         generator: Generator,
         llm_provider = None,  # Pour validators
         reranker: Optional[CrossEncoderReranker] = None,
+        intent_classifier: Optional[IntentClassifier] = None,
         debug_mode: bool = False,
         enable_validation: bool = True,  # Validation ON par défaut
         rerank_candidates: int = 40,     # Candidats bruts passés au reranker (semantic+BM25, pas dédupliqués)
@@ -119,6 +124,7 @@ class RAGPipeline:
             generator: Generator configuré
             llm_provider: Provider LLM pour validators
             reranker: Cross-encoder reranker (optionnel)
+            intent_classifier: Classifieur d'intention (optionnel)
             debug_mode: Si True, inclut contexte et documents dans la réponse
             enable_validation: Active validation pertinence + grounding
             rerank_candidates: Chunks à envoyer au reranker
@@ -128,6 +134,7 @@ class RAGPipeline:
         self.context_builder = context_builder
         self.generator = generator
         self.reranker = reranker
+        self.intent_classifier = intent_classifier
         self.debug_mode = debug_mode
         self.enable_validation = enable_validation
         self.rerank_candidates = rerank_candidates
@@ -181,6 +188,12 @@ class RAGPipeline:
             effective_filter = build_enterprise_where_filter(where_filter, enterprise_tags)
             if enterprise_tags:
                 logger.info(f"🏷️  Filtre tags entreprise : {enterprise_tags}")
+            
+            # 0.5 INTENT CLASSIFICATION
+            intent = None
+            if self.intent_classifier is not None:
+                logger.info("🎯 Phase 0 : Intent Classification")
+                intent = self.intent_classifier.classify(question)
             
             # 1. RETRIEVAL
             logger.info("📥 Phase 1 : Retrieval")
@@ -317,6 +330,7 @@ class RAGPipeline:
                     question=question,
                     conversation_history=conversation_history,
                     reverse_packing_override=False,
+                    intent=intent,
                 )
                 # Pass B : ordre inversé (Source 1 en dernier, recency bias)
                 context_b = self.context_builder.build_context(
@@ -324,6 +338,7 @@ class RAGPipeline:
                     question=question,
                     conversation_history=conversation_history,
                     reverse_packing_override=True,
+                    intent=intent,
                 )
                 
                 logger.info(f"✅ Dual context construit (A={len(context_a['user'])} chars, B={len(context_b['user'])} chars)")
@@ -369,7 +384,8 @@ class RAGPipeline:
                 context = self.context_builder.build_context(
                     documents=documents,
                     question=question,
-                    conversation_history=conversation_history
+                    conversation_history=conversation_history,
+                    intent=intent,
                 )
                 
                 logger.info(f"✅ Context construit ({len(context['user'])} chars)")
@@ -525,7 +541,8 @@ class RAGPipeline:
                 model=generated.model,
                 retrieval_time=retrieval_time,
                 generation_time=generation_time,
-                total_time=total_time
+                total_time=total_time,
+                intent=intent,
             )
             
             # Debug info
@@ -533,8 +550,10 @@ class RAGPipeline:
                 response.retrieved_documents = documents
                 response.context_used = context['user']
             
+            intent_label = intent.intent if intent else "N/A"
             logger.info(f"\n{'='*80}")
             logger.info(f"✅ Pipeline terminé en {total_time:.2f}s")
+            logger.info(f"   - Intent: {intent_label}")
             logger.info(f"   - Retrieval: {retrieval_time:.2f}s")
             logger.info(f"   - Generation: {generation_time:.2f}s")
             logger.info(f"   - Documents: {len(documents)}")
@@ -1099,13 +1118,17 @@ def create_pipeline(
         temperature=temperature,
     )
     
+    # ── Intent Classifier ──
+    intent_classifier = IntentClassifier(llm_provider=llm_provider)
+    
     init_time = time.time() - init_start
     logger.info(
         f"✅ Pipeline initialisé en {init_time:.1f}s "
         f"(hybrid={'ON' if enable_hybrid else 'OFF'}, "
         f"reranker={'ON' if enable_reranker else 'OFF'}, "
         f"summary_filter={'ON' if enable_summary_prefilter else 'OFF'}, "
-        f"query_expansion={'ON' if enable_query_expansion else 'OFF'})"
+        f"query_expansion={'ON' if enable_query_expansion else 'OFF'}, "
+        f"intent_classifier=ON)"
     )
     
     return RAGPipeline(
@@ -1114,6 +1137,7 @@ def create_pipeline(
         generator=generator,
         llm_provider=llm_provider,  # Pour validators
         reranker=reranker,
+        intent_classifier=intent_classifier,
         debug_mode=debug_mode,
         enable_validation=enable_validation,
         rerank_candidates=rerank_candidates,

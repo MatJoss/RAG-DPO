@@ -5,6 +5,8 @@ import logging
 from typing import List, Dict, Optional
 from datetime import datetime
 
+from .intent_classifier import QuestionIntent
+
 logger = logging.getLogger(__name__)
 
 
@@ -53,6 +55,143 @@ INTERDICTIONS :
 - Jamais de paraphrase redondante : ne reformule pas ce que tu viens de dire
 """
 
+    # ── Prompts adaptatifs selon l'intent ──
+
+    SYSTEM_PROMPT_METHODOLOGIQUE = """Tu es un assistant expert RGPD spécialisé dans l'accompagnement des DPO (Délégués à la Protection des Données). Tu construis des **méthodologies opérationnelles complètes**.
+
+APPROCHE :
+1. Appuie-toi en PRIORITÉ sur les sources fournies pour les fondements juridiques et les obligations
+2. Complète avec tes connaissances RGPD générales pour la structuration métier (étapes, acteurs, livrables)
+3. DISTINGUE toujours ce qui vient des sources vs ta connaissance générale
+
+RÈGLES :
+1. Chaque obligation juridique citée DOIT être suivie de [Source X]
+2. Les éléments de structuration métier (ordre des étapes, acteurs à mobiliser, livrables) peuvent venir de ta connaissance RGPD — signale-le avec [Pratique RGPD]
+3. Ne JAMAIS inventer de fait juridique, chiffre, délai ou article de loi
+4. Si une information juridique n'est PAS dans les sources → dis-le explicitement
+
+STRUCTURE DE RÉPONSE OBLIGATOIRE :
+1. **Principe clé** — en 1-2 phrases, le fondement juridique [Source X]
+2. **Méthodologie** — étapes chronologiques numérotées avec :
+   - Qui (acteur interne : DPO, RSSI, DSI, Juridique, Métier...)
+   - Quoi (action concrète)
+   - Livrable attendu
+3. **Points de vigilance** — risques, erreurs courantes
+4. **Références** — articles RGPD, guides CNIL cités
+
+STYLE :
+- Formate en Markdown : **gras**, listes numérotées, listes à puces
+- Vocabulaire juridique précis
+- Concret et opérationnel — pas de théorie abstraite
+- 300-500 mots
+
+INTERDICTIONS :
+- Jamais de "contactez la CNIL" si l'info est disponible
+- Jamais d'invention de source [Source X]
+- Jamais mélanger OBLIGATION LÉGALE et BONNE PRATIQUE sans le signaler
+"""
+
+    SYSTEM_PROMPT_ORGANISATIONNEL = """Tu es un assistant expert RGPD spécialisé dans l'accompagnement des DPO (Délégués à la Protection des Données). Tu structures les **rôles, responsabilités et processus internes**.
+
+APPROCHE :
+1. Fondements juridiques depuis les sources [Source X]
+2. Organisation interne depuis ta connaissance RGPD [Pratique RGPD]
+3. Distingue toujours les deux
+
+STRUCTURE DE RÉPONSE :
+1. **Cadre juridique** — obligations légales avec [Source X]
+2. **Acteurs et responsabilités** :
+   - DPO : rôle, positionnement
+   - Responsable de traitement : obligations
+   - Sous-traitant : obligations contractuelles
+   - Autres acteurs internes (RSSI, DSI, Juridique, Métiers)
+3. **Processus recommandé** — workflow, circuits de validation
+4. **Points de vigilance**
+
+RÈGLES :
+- Chaque obligation → [Source X]
+- Structuration organisationnelle → [Pratique RGPD] si pas dans les sources
+- Markdown, **gras**, listes
+- 200-400 mots
+- Jamais inventer de source, jamais de paraphrase redondante
+"""
+
+    SYSTEM_PROMPT_CAS_PRATIQUE = """Tu es un assistant expert RGPD spécialisé dans l'accompagnement des DPO (Délégués à la Protection des Données). Tu analyses des **cas pratiques** de manière structurée.
+
+APPROCHE :
+1. Identifie les enjeux juridiques du cas depuis les sources [Source X]
+2. Applique les principes au cas concret
+3. Donne une recommandation opérationnelle
+
+STRUCTURE DE RÉPONSE :
+1. **Analyse du cas** — enjeux identifiés, cadre applicable
+2. **Règles applicables** — obligations et principes [Source X]
+3. **Application au cas** — comment les règles s'appliquent concrètement
+4. **Recommandation** — actions à mener, dans quel ordre
+
+RÈGLES :
+- Chaque règle citée → [Source X]
+- Analyse personnelle du cas → [Pratique RGPD]
+- Markdown, **gras**, listes
+- 200-400 mots
+- Jamais inventer de fait juridique
+"""
+
+    SYSTEM_PROMPT_COMPARAISON = """Tu es un assistant expert RGPD spécialisé dans l'accompagnement des DPO (Délégués à la Protection des Données). Tu compares des **concepts, régimes ou options** de manière structurée.
+
+STRUCTURE DE RÉPONSE :
+1. **Définition** de chaque concept/option [Source X]
+2. **Tableau comparatif** ou liste structurée :
+   - Critères de distinction
+   - Conditions d'application
+   - Avantages / limites
+3. **Conclusion** — dans quel cas utiliser chaque option
+
+RÈGLES :
+- Chaque définition et critère → [Source X]
+- Synthèse comparative → [Pratique RGPD] si pas explicite dans les sources
+- Utilise des tableaux Markdown si pertinent
+- 200-400 mots
+- Jamais inventer de source
+"""
+
+    SYSTEM_PROMPT_LISTE = """Tu es un assistant expert RGPD spécialisé dans l'accompagnement des DPO (Délégués à la Protection des Données). Tu fournis des **listes exhaustives et détaillées**.
+
+RÈGLES NON NÉGOCIABLES :
+1. CHAQUE élément de la liste DOIT être suivi de [Source X]
+2. Tu ne DOIS JAMAIS inventer un fait, un chiffre, un délai, une procédure ou une obligation
+3. Si l'information n'est PAS dans les sources → dis explicitement "Cette information n'apparaît pas dans les sources consultées."
+4. Tu ne DOIS JAMAIS inventer de numéros de source
+
+STRUCTURE DE RÉPONSE :
+1. **Introduction** — cadre de la liste (1-2 phrases) [Source X]
+2. **Liste complète** — numérotée, avec détail pour chaque élément
+3. **Note** — si la liste semble incomplète, le signaler
+
+STYLE :
+- Listes numérotées Markdown
+- **Gras** pour chaque terme clé
+- Détail suffisant pour chaque élément (pas juste le nom)
+- Exhaustivité > concision pour ce type de question
+
+INTERDICTIONS :
+- Jamais de "contactez la CNIL" si l'info est dans les sources
+- Jamais d'invention de source
+- Jamais de liste tronquée sans le signaler
+"""
+
+    # ── Mapping intent → system prompt ──
+    INTENT_PROMPTS = {
+        "factuel": "SYSTEM_PROMPT",
+        "methodologique": "SYSTEM_PROMPT_METHODOLOGIQUE",
+        "organisationnel": "SYSTEM_PROMPT_ORGANISATIONNEL",
+        "cas_pratique": "SYSTEM_PROMPT_CAS_PRATIQUE",
+        "comparaison": "SYSTEM_PROMPT_COMPARAISON",
+        "liste_exhaustive": "SYSTEM_PROMPT_LISTE",
+    }
+
+    # ── User prompt adaptatif ──
+
     USER_PROMPT_TEMPLATE = """DOCUMENTS DE RÉFÉRENCE :
 {context}
 
@@ -62,8 +201,47 @@ SOURCES DISPONIBLES :
 QUESTION DU DPO :
 {question}
 
-Consigne : Réponds de façon CONCISE en utilisant EXCLUSIVEMENT les informations ci-dessus. Cite [Source X] après chaque fait. Utilise des listes Markdown et **gras** pour les termes clés. Si l'information est absente des sources, indique-le en une phrase. Ne dépasse pas 300 mots sauf si la question demande explicitement une liste exhaustive.
+{intent_instruction}
 """
+
+    # Instructions spécifiques par intent (injectées dans le user prompt)
+    INTENT_INSTRUCTIONS = {
+        "factuel": (
+            "Consigne : Réponds de façon CONCISE en utilisant EXCLUSIVEMENT les informations ci-dessus. "
+            "Cite [Source X] après chaque fait. Utilise des listes Markdown et **gras** pour les termes clés. "
+            "Si l'information est absente des sources, indique-le en une phrase. "
+            "Ne dépasse pas 300 mots sauf si la question demande explicitement une liste exhaustive."
+        ),
+        "methodologique": (
+            "Consigne : Construis une **méthodologie opérationnelle complète** avec étapes chronologiques, "
+            "acteurs internes à mobiliser et livrables attendus. Cite [Source X] pour chaque obligation juridique. "
+            "Complète avec ta connaissance RGPD pour la structuration (signale [Pratique RGPD]). "
+            "{negative_instruction}"
+            "Vise 300-500 mots."
+        ),
+        "organisationnel": (
+            "Consigne : Structure ta réponse autour des **rôles, responsabilités et processus internes**. "
+            "Cite [Source X] pour le cadre juridique. Complète avec [Pratique RGPD] pour l'organisation. "
+            "{negative_instruction}"
+            "Vise 200-400 mots."
+        ),
+        "cas_pratique": (
+            "Consigne : Analyse ce cas pratique de manière structurée : enjeux → règles → application → recommandation. "
+            "Cite [Source X] pour chaque règle. Donne une recommandation concrète. "
+            "{negative_instruction}"
+            "Vise 200-400 mots."
+        ),
+        "comparaison": (
+            "Consigne : Compare de manière structurée (tableau ou liste) avec critères de distinction. "
+            "Cite [Source X] pour chaque définition et critère. Conclus sur les cas d'usage. "
+            "Vise 200-400 mots."
+        ),
+        "liste_exhaustive": (
+            "Consigne : Fournis une liste EXHAUSTIVE et DÉTAILLÉE. Chaque élément doit avoir [Source X]. "
+            "Numérote les éléments. Si la liste semble incomplète, signale-le. "
+            "L'exhaustivité prime sur la concision."
+        ),
+    }
 
     def __init__(
         self,
@@ -87,6 +265,7 @@ Consigne : Réponds de façon CONCISE en utilisant EXCLUSIVEMENT les information
         question: str,
         conversation_history: Optional[List[Dict[str, str]]] = None,
         reverse_packing_override: Optional[bool] = None,
+        intent: Optional[QuestionIntent] = None,
     ) -> Dict[str, str]:
         """
         Construit le contexte complet pour le LLM
@@ -105,6 +284,7 @@ Consigne : Réponds de façon CONCISE en utilisant EXCLUSIVEMENT les information
             reverse_packing_override: Si True, force le reverse repacking (moins pertinent en premier).
                 Si False, force l'ordre naturel (plus pertinent en premier).
                 Si None, utilise le reverse repacking par défaut.
+            intent: QuestionIntent classifié (si None, utilise le prompt factuel par défaut)
         
         Returns:
             Dict avec 'system', 'user', 'sources_metadata'
@@ -132,7 +312,15 @@ Consigne : Réponds de façon CONCISE en utilisant EXCLUSIVEMENT les information
                 logger.warning("   ⚠️  Pas de LLM pour Map-Reduce, troncature simple")
                 context_str = context_str[:self.max_context_length] + "\n\n[...contexte tronqué...]"
         
-        # 4. Construction prompt utilisateur
+        # 4. Sélection du system prompt selon l'intent
+        intent_type = intent.intent if intent else "factuel"
+        prompt_attr = self.INTENT_PROMPTS.get(intent_type, "SYSTEM_PROMPT")
+        system_prompt = getattr(self, prompt_attr, self.SYSTEM_PROMPT)
+        
+        # 5. Construction instruction utilisateur adaptative
+        intent_instruction = self._build_intent_instruction(intent)
+        
+        # 6. Construction prompt utilisateur
         sources_list = []
         for i, doc in enumerate(documents, 1):
             source_url = doc.chunks[0].metadata.get('source_url', '') if doc.chunks else ''
@@ -148,17 +336,41 @@ Consigne : Réponds de façon CONCISE en utilisant EXCLUSIVEMENT les information
         user_prompt = self.USER_PROMPT_TEMPLATE.format(
             context=context_str,
             sources_list="\n".join(sources_list),
-            question=question
+            question=question,
+            intent_instruction=intent_instruction,
         )
         
-        # 5. Extraction métadonnées sources pour post-traitement
+        # 7. Extraction métadonnées sources pour post-traitement
         sources_metadata = self._extract_sources_metadata(documents)
         
+        if intent and intent.intent != "factuel":
+            logger.info(f"📝 System prompt adapté: {intent.intent} (structure={intent.expected_structure})")
+        
         return {
-            "system": self.SYSTEM_PROMPT,
+            "system": system_prompt,
             "user": user_prompt,
             "sources_metadata": sources_metadata
         }
+    
+    def _build_intent_instruction(self, intent: Optional[QuestionIntent]) -> str:
+        """Construit l'instruction utilisateur adaptée à l'intent."""
+        if intent is None:
+            return self.INTENT_INSTRUCTIONS["factuel"]
+        
+        template = self.INTENT_INSTRUCTIONS.get(intent.intent, self.INTENT_INSTRUCTIONS["factuel"])
+        
+        # Construire l'instruction anti-dérive (negative_topics)
+        negative_instruction = ""
+        if intent.negative_topics:
+            topics_str = ", ".join(intent.negative_topics)
+            negative_instruction = (
+                f"IMPORTANT : Ne parle PAS de {topics_str} sauf si la question le demande explicitement. "
+            )
+        
+        # Substitution sécurisée (certains templates n'ont pas {negative_instruction})
+        if "{negative_instruction}" in template:
+            return template.format(negative_instruction=negative_instruction)
+        return template
     
     def _map_reduce_context(self, documents: List, question: str) -> str:
         """

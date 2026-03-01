@@ -9,6 +9,7 @@ Les nœuds réutilisent les composants existants du pipeline natif
 sans duplication de logique.
 """
 import logging
+import re
 import time
 from typing import Any, Dict, List, Optional
 
@@ -20,6 +21,15 @@ from ..reranker import CrossEncoderReranker, RankedChunk
 from ..retriever import RAGRetriever, RetrievedChunk, RetrievedDocument
 from ..validators import GroundingValidator
 from .state import RAGState
+from .tools import (
+    RGPD_ARTICLES,
+    RGPD_DEADLINES,
+    calculate_deadline,
+    check_answer_completeness,
+    decompose_question,
+    lookup_article,
+    search_articles_by_topic,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -155,6 +165,7 @@ def make_generate_node(components: NodeComponents):
         intent = state.get("intent")
         conversation_history = state.get("conversation_history")
         temperature = state.get("temperature")
+        tool_results = state.get("tool_results")
         
         if not documents:
             return {
@@ -172,6 +183,32 @@ def make_generate_node(components: NodeComponents):
             conversation_history=conversation_history,
             intent=intent,
         )
+        
+        # ── Injection des tool_results dans le user prompt ──
+        if tool_results:
+            enrichment_lines = []
+            
+            if "rgpd_articles" in tool_results:
+                enrichment_lines.append("\n--- Références RGPD pertinentes ---")
+                for art in tool_results["rgpd_articles"]:
+                    enrichment_lines.append(f"• {art['titre']} : {art['description']}")
+            
+            if "deadlines" in tool_results:
+                enrichment_lines.append("\n--- Délais réglementaires ---")
+                for dl in tool_results["deadlines"]:
+                    enrichment_lines.append(
+                        f"• {dl['description']} : {dl['delai']} ({dl['article']})"
+                    )
+            
+            if "topic_articles" in tool_results:
+                enrichment_lines.append("\n--- Articles RGPD liés au sujet ---")
+                for art in tool_results["topic_articles"][:3]:
+                    enrichment_lines.append(f"• Art. {art['article']} : {art['description'][:100]}")
+            
+            if enrichment_lines:
+                enrichment_block = "\n".join(enrichment_lines)
+                context["user"] = context["user"] + f"\n\n{enrichment_block}\n"
+                logger.info(f"   🔧 {len(enrichment_lines)} lignes d'enrichissement injectées")
         
         logger.info(f"   Context: {len(context['user'])} chars")
         
@@ -289,6 +326,164 @@ def make_respond_node(components: NodeComponents):
         return {"total_time": total_time}
     
     return respond
+
+
+def make_enrich_node(components: NodeComponents):
+    """Crée le nœud d'enrichissement par tools locaux.
+    
+    Détecte automatiquement les articles RGPD et délais mentionnés
+    dans la question, et injecte les résultats dans le state.
+    
+    Position dans le graphe : classify → **enrich** → retrieve
+    Cela permet d'enrichir la recherche avec des infos structurées.
+    """
+    
+    def enrich(state: RAGState) -> Dict[str, Any]:
+        question = state["question"]
+        intent = state.get("intent")
+        
+        logger.info(f"🔧 [Agent] Phase 0b : Tool Enrichment")
+        
+        tool_results: Dict[str, Any] = {}
+        
+        # ── 1. Détection d'articles RGPD ──
+        # Patterns: "article 33", "art. 33", "art 33", "l'article 33"
+        article_matches = re.findall(
+            r"(?:l['''])?art(?:icle)?\.?\s*(\d{1,2})",
+            question,
+            re.IGNORECASE,
+        )
+        if article_matches:
+            articles = []
+            for match in set(article_matches):
+                num = int(match)
+                result = lookup_article(num)
+                if result.get("found"):
+                    articles.append(result)
+            if articles:
+                tool_results["rgpd_articles"] = articles
+                logger.info(f"   📖 {len(articles)} article(s) RGPD trouvé(s): {[a['article'] for a in articles]}")
+        
+        # ── 2. Détection de délais / deadlines ──
+        deadline_keywords = {
+            "72h": "notification_violation",
+            "72 heures": "notification_violation",
+            "notification": "notification_violation",
+            "violation": "notification_violation",
+            "breach": "notification_violation",
+            "droit d'accès": "reponse_droits",
+            "demande d'accès": "reponse_droits",
+            "exercice des droits": "reponse_droits",
+            "droit de rectification": "reponse_droits",
+            "droit à l'effacement": "reponse_droits",
+            "droit d'opposition": "reponse_droits",
+            "conservation": "conservation_cv",
+            "vidéosurveillance": "conservation_videosurveillance",
+            "vidéo": "conservation_videosurveillance",
+            "registre": "tenue_registre",
+            "aipd": "aipd_avant_mise_en_oeuvre",
+            "dpia": "aipd_avant_mise_en_oeuvre",
+            "analyse d'impact": "aipd_avant_mise_en_oeuvre",
+        }
+        
+        q_lower = question.lower()
+        detected_deadlines = set()
+        for keyword, deadline_type in deadline_keywords.items():
+            if keyword in q_lower:
+                detected_deadlines.add(deadline_type)
+        
+        if detected_deadlines:
+            deadlines = []
+            for dt in detected_deadlines:
+                result = calculate_deadline(dt)
+                deadlines.append({
+                    "type": result.deadline_type,
+                    "description": result.description,
+                    "article": result.article,
+                    "delai": f"{RGPD_DEADLINES[dt]['delai']} {RGPD_DEADLINES[dt]['unite']}" 
+                             if RGPD_DEADLINES[dt]['delai'] else RGPD_DEADLINES[dt]['unite'],
+                    "note": result.note,
+                })
+            tool_results["deadlines"] = deadlines
+            logger.info(f"   ⏰ {len(deadlines)} délai(s) RGPD détecté(s)")
+        
+        # ── 3. Recherche thématique d'articles ──
+        # Si l'intent porte sur un sujet spécifique mais sans numéro d'article
+        if not article_matches and intent:
+            for topic in (intent.topics or []):
+                topic_articles = search_articles_by_topic(topic)
+                if topic_articles:
+                    tool_results.setdefault("topic_articles", []).extend(topic_articles[:3])
+            
+            if tool_results.get("topic_articles"):
+                # Dédupliquer par numéro d'article
+                seen = set()
+                unique = []
+                for a in tool_results["topic_articles"]:
+                    if a["article"] not in seen:
+                        seen.add(a["article"])
+                        unique.append(a)
+                tool_results["topic_articles"] = unique[:5]
+                logger.info(f"   🏷️  {len(tool_results['topic_articles'])} article(s) par topic")
+        
+        if tool_results:
+            logger.info(f"   ✅ Enrichissement: {list(tool_results.keys())}")
+        else:
+            logger.info(f"   ∅ Aucun enrichissement applicable")
+        
+        return {"tool_results": tool_results if tool_results else None}
+    
+    return enrich
+
+
+def make_check_completeness_node(components: NodeComponents):
+    """Crée le nœud de vérification de complétude post-validation.
+    
+    Après validation grounding, vérifie si la réponse couvre tous
+    les aspects de la question. Si non, identifie les aspects
+    manquants pour un éventuel re-retrieval ciblé.
+    
+    Position : validate → **check_completeness** → respond/retrieve
+    Activé uniquement si retry_count < max_retries.
+    """
+    
+    def check_completeness(state: RAGState) -> Dict[str, Any]:
+        answer = state.get("answer", "")
+        question = state["question"]
+        retry_count = state.get("retry_count", 0)
+        validation_passed = state.get("validation_passed", True)
+        
+        # Skip si validation échouée (le retry loop gère ça)
+        if not validation_passed:
+            return {}
+        
+        # Skip si déjà en retry (éviter boucle infinie)
+        if retry_count >= components.max_retries:
+            return {"completeness": {"is_complete": True, "coverage_pct": 100}}
+        
+        # Skip les réponses d'erreur
+        if len(answer) < 50:
+            return {"completeness": {"is_complete": True, "coverage_pct": 100}}
+        
+        logger.info(f"🔎 [Agent] Phase 5 : Completeness Check")
+        
+        result = check_answer_completeness(
+            question=question,
+            answer=answer,
+            llm_provider=components.generator.llm_provider,
+        )
+        
+        if result["is_complete"] or result.get("coverage_pct", 100) >= 80:
+            logger.info(f"   ✅ Réponse complète ({result.get('coverage_pct', 100)}%)")
+        else:
+            logger.warning(
+                f"   ⚠️  Couverture {result.get('coverage_pct', 0)}% — "
+                f"Manquant: {result.get('missing_aspects', [])}"
+            )
+        
+        return {"completeness": result}
+    
+    return check_completeness
 
 
 # ═══════════════════════════════════════════════════════════════

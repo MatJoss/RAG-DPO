@@ -1,15 +1,18 @@
 """
 RAG Agent Graph — Définition du StateGraph LangGraph.
 
-Graphe d'états avec routage conditionnel :
+Graphe d'états avec routage conditionnel et tools :
 
-    START → classify → retrieve → generate → validate ─→ respond → END
-                                      ↑                    │
-                                      └── (retry) ─────────┘
+    START → classify → enrich → retrieve → generate → validate ─→ check_completeness ─→ respond → END
+                                    ↑                                       │
+                                    └──── (retry: re-retrieve ciblé) ───────┘
 
-La boucle validate → generate est le vrai avantage par rapport au pipeline
-natif : si le grounding échoue, on re-génère automatiquement au lieu
-d'accepter une réponse dégradée.
+L'enrichissement (enrich) injecte des infos structurées (articles RGPD,
+délais) dans le state AVANT le retrieval — l'info est ensuite injectée
+dans le prompt au moment du generate.
+
+La boucle check_completeness → retrieve est le vrai avantage agent :
+si la réponse est incomplète, on re-recherche sur les aspects manquants.
 """
 import logging
 import time
@@ -26,7 +29,9 @@ from ..retriever import RAGRetriever, create_retriever
 from ..validators import GroundingValidator
 from .nodes import (
     NodeComponents,
+    make_check_completeness_node,
     make_classify_node,
+    make_enrich_node,
     make_generate_node,
     make_respond_node,
     make_retrieve_node,
@@ -45,32 +50,36 @@ def build_graph(components: NodeComponents) -> StateGraph:
     """Construit le graphe LangGraph à partir des composants.
     
     Architecture :
-        classify → retrieve → generate → validate → respond
-                                  ↑            │
-                                  └── (retry) ─┘
+        classify → enrich → retrieve → generate → validate → check_completeness → respond
+                                ↑           ↑                        │
+                                │           └── (grounding retry) ───┤
+                                └── (completeness re-retrieve) ──────┘
     """
     graph = StateGraph(RAGState)
     
     # ── Nœuds ──
     graph.add_node("classify", make_classify_node(components))
+    graph.add_node("enrich", make_enrich_node(components))
     graph.add_node("retrieve", make_retrieve_node(components))
     graph.add_node("generate", make_generate_node(components))
     graph.add_node("validate", make_validate_node(components))
+    graph.add_node("check_completeness", make_check_completeness_node(components))
     graph.add_node("respond", make_respond_node(components))
     
     # ── Arêtes ──
     graph.add_edge(START, "classify")
-    graph.add_edge("classify", "retrieve")
+    graph.add_edge("classify", "enrich")
+    graph.add_edge("enrich", "retrieve")
     graph.add_edge("retrieve", "generate")
     graph.add_edge("generate", "validate")
     
-    # Routage conditionnel après validation
+    # Routage conditionnel après validation (grounding retry)
     def should_retry(state: RAGState) -> str:
-        """Décide si on relance la génération ou on termine."""
+        """Décide si on relance la génération ou on passe au check de complétude."""
         if state.get("validation_passed", True):
-            return "respond"
+            return "check_completeness"
         if state.get("retry_count", 0) > components.max_retries:
-            return "respond"
+            return "check_completeness"
         if state.get("error"):
             return "respond"
         # Retry : re-générer avec temperature plus basse
@@ -79,8 +88,36 @@ def build_graph(components: NodeComponents) -> StateGraph:
     graph.add_conditional_edges(
         "validate",
         should_retry,
-        {"respond": "respond", "generate": "generate"},
+        {
+            "check_completeness": "check_completeness",
+            "generate": "generate",
+            "respond": "respond",
+        },
     )
+    
+    # Routage conditionnel après completeness check
+    def should_re_retrieve(state: RAGState) -> str:
+        """Décide si on re-recherche les aspects manquants ou on termine."""
+        completeness = state.get("completeness", {})
+        retry_count = state.get("retry_count", 0)
+        
+        # Si réponse complète ou déjà retryed → terminer
+        if completeness.get("is_complete", True):
+            return "respond"
+        if completeness.get("coverage_pct", 100) >= 80:
+            return "respond"
+        if retry_count >= components.max_retries:
+            return "respond"
+        
+        # Re-retrieval ciblé avec la suggested_query
+        return "retrieve"
+    
+    graph.add_conditional_edges(
+        "check_completeness",
+        should_re_retrieve,
+        {"respond": "respond", "retrieve": "retrieve"},
+    )
+    
     graph.add_edge("respond", END)
     
     return graph

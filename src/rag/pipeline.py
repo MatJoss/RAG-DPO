@@ -114,7 +114,7 @@ class RAGPipeline:
         intent_classifier: Optional[IntentClassifier] = None,
         debug_mode: bool = False,
         enable_validation: bool = True,  # Validation ON par défaut
-        enable_dual_gen: bool = True,    # Dual-generation (self-consistency)
+        enable_dual_gen: bool = False,   # Dual-gen OFF par défaut (intent classifier suffit)
         rerank_candidates: int = 40,     # Candidats bruts passés au reranker (semantic+BM25, pas dédupliqués)
         rerank_top_k: int = 10,          # Nombre de chunks à garder après reranking
     ):
@@ -995,7 +995,7 @@ def create_pipeline(
     enable_validation: bool = True,  # Validation ON par défaut
     enable_hybrid: bool = True,      # Recherche hybride BM25+semantic
     enable_reranker: bool = True,    # Cross-encoder reranking
-    enable_dual_gen: bool = True,     # Dual-generation self-consistency
+    enable_dual_gen: bool = False,    # Dual-gen OFF par défaut (intent classifier suffit)
     enable_summary_prefilter: bool = True,  # Pré-filtre par summaries
     enable_query_expansion: bool = True,    # LLM query expansion (multi-query)
     summaries_path: Optional[str] = None,

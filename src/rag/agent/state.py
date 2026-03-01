@@ -46,6 +46,11 @@ class RAGState(TypedDict, total=False):
     validation_reason: str
     retry_count: int
     
+    # ── Tools ──
+    tool_results: Optional[Dict[str, Any]]  # Résultats des tools (articles, deadlines, etc.)
+    completeness: Optional[Dict[str, Any]]  # Résultat du check de complétude
+    sub_questions: Optional[List[str]]  # Question décomposée en sous-questions
+    
     # ── Timing ──
     start_time: float
     total_time: float

@@ -610,7 +610,7 @@ def evaluate_single(qa_item: Dict, answer: str, sources: List[Dict] = None, use_
 # Pipeline Init
 # ═══════════════════════════════════════════════════════════════
 
-def init_pipeline(embedding_mode: str = "bge-m3", enable_dual_gen: bool = True, use_agent: bool = False):
+def init_pipeline(embedding_mode: str = "bge-m3", enable_dual_gen: bool = False, use_agent: bool = False):
     """
     Initialise le pipeline RAG pour l'évaluation.
     
@@ -712,7 +712,7 @@ def run_evaluation(
     verbose: bool = False,
     use_llm_judge: bool = True,
     embedding_mode: str = "bge-m3",
-    enable_dual_gen: bool = True,
+    enable_dual_gen: bool = False,
     use_agent: bool = False,
 ) -> Dict:
     """
@@ -1020,8 +1020,8 @@ def main():
     parser.add_argument("--dataset", default=None, help="Chemin vers le dataset JSON")
     parser.add_argument("--embedding", choices=["bge-m3", "nomic"], default="bge-m3",
                         help="Modèle d'embedding à utiliser (défaut: bge-m3)")
-    parser.add_argument("--no-dual", action="store_true",
-                        help="Désactive la dual-generation (single-gen, plus rapide)")
+    parser.add_argument("--dual", action="store_true",
+                        help="Active la dual-generation (single-gen par défaut, dual plus lent)")
     parser.add_argument("--agent", action="store_true",
                         help="Utilise le pipeline LangGraph agent au lieu du natif")
     
@@ -1040,7 +1040,7 @@ def main():
         verbose=args.verbose,
         use_llm_judge=not args.no_llm_judge,
         embedding_mode=args.embedding,
-        enable_dual_gen=not args.no_dual,
+        enable_dual_gen=args.dual,
         use_agent=args.agent,
     )
 

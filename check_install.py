@@ -140,15 +140,20 @@ class InstallationChecker:
                     self.check_item("Ollama", True, f"{len(models)} modèle(s) installé(s)")
                     
                     # Vérifier les modèles recommandés
-                    if 'llama3.1:8b' in models:
-                        self.check_item("  llama3.1:8b", True, "Modèle LLM présent")
+                    has_mistral = any('mistral-nemo' in m for m in models)
+                    if has_mistral:
+                        self.check_item("  mistral-nemo", True, "Modèle LLM présent")
                     else:
-                        self.warn_item("  llama3.1:8b", "Modèle LLM non téléchargé")
+                        self.warn_item("  mistral-nemo", "Modèle LLM non téléchargé — ollama pull mistral-nemo")
                     
-                    if 'nomic-embed-text:latest' in models:
-                        self.check_item("  nomic-embed-text:latest", True, "Modèle embeddings présent")
-                    else:
-                        self.warn_item("  nomic-embed-text:latest", "Modèle embeddings non téléchargé")
+                    # BGE-M3 est géré par sentence-transformers (pas Ollama)
+                    try:
+                        from sentence_transformers import SentenceTransformer
+                        self.check_item("  BGE-M3 (embeddings)", True, 
+                                      "sentence-transformers installé (modèle téléchargé au 1er lancement)")
+                    except ImportError:
+                        self.warn_item("  BGE-M3 (embeddings)", 
+                                     "sentence-transformers non installé — pip install sentence-transformers")
                     
                     return True
                 else:
@@ -222,12 +227,13 @@ class InstallationChecker:
     def check_dependencies(self) -> bool:
         """Vérifie les dépendances Python critiques"""
         critical_packages = [
-            ('langchain', 'LangChain'),
+            ('ollama', 'Ollama Python client'),
             ('chromadb', 'ChromaDB'),
-            ('sentence_transformers', 'Sentence Transformers'),
+            ('sentence_transformers', 'Sentence Transformers (BGE-M3)'),
             ('streamlit', 'Streamlit'),
-            ('requests', 'Requests'),
+            ('rank_bm25', 'BM25 (recherche hybride)'),
             ('bs4', 'BeautifulSoup'),
+            ('yaml', 'PyYAML'),
         ]
         
         all_ok = True
@@ -310,12 +316,12 @@ class InstallationChecker:
         if not self.errors and not self.warnings:
             print("\n🎉 Installation parfaite ! Vous êtes prêt à démarrer.")
             print("\n📝 Prochaines étapes :")
-            print("   1. Lancer le scraping : python src/scraping/cnil_scraper.py")
-            print("   2. Traiter les données : python src/processing/process_data.py")
-            print("   3. Lancer l'interface : streamlit run src/app.py")
+            print("   1. Lancer l'interface : streamlit run app.py")
+            print("   2. Tester en CLI : python test_rag.py \"Qu'est-ce qu'une donnée personnelle ?\"")
+            print("   3. Évaluer : python eval/run_eval.py --verbose")
         elif not self.errors:
             print("\n✅ Installation fonctionnelle avec quelques avertissements.")
-            print("   Vous pouvez commencer le scraping.")
+            print("   Lancez : streamlit run app.py")
 
 
 def main():

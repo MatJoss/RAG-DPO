@@ -225,7 +225,7 @@ RAG-DPO/
 ### 1. Clone and install
 
 ```bash
-git clone https://github.com/<user>/RAG-DPO.git
+git clone https://github.com/MatJoss/RAG-DPO.git
 cd RAG-DPO
 python -m venv venv
 venv\Scripts\activate        # Windows

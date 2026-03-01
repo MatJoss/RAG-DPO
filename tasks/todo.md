@@ -13,6 +13,7 @@
 | **3** | 📂 Pipeline ingestion entreprise (incrémental) | 1 sem | 🔨 En cours |
 | **4** | 📊 Observabilité (logs, feedback, dashboard) | 2-3j | ✅ Done |
 | **5** | 🐳 Docker (on package le produit fini) | 2-3j | 🔲 |
+| **5b** | 🔄 Init & Update CNIL (routine mensuelle) | 1j | ✅ Done |
 | **6** | 🕸️ Graph RAG (LightRAG) | 2 sem | 🔲 v2 |
 
 ---

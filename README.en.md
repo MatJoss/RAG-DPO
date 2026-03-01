@@ -159,6 +159,7 @@ This mechanism solved the system's most persistent problem (q10: *"Can legitimat
 ```
 RAG-DPO/
 ├── app.py                      # Streamlit multipage entry point
+├── update_cnil.py              # Incremental CNIL database update (~1x/month)
 ├── pages/
 │   ├── 1_💬_Chat.py            # Interactive RAG chat + feedback
 │   └── 2_📊_Dashboard.py       # Observability dashboard (metrics, alerts)
@@ -319,6 +320,29 @@ Final score = 70% LLM Judge + 30% Keywords
 | q16 | Who decides the means? | Definition | **100%** | 11.5s |
 | q17 | Best marketing basis 2024? | Out of scope | **85%** | 17.3s |
 | q18 | Bypass CNIL obligation? | Out of scope | **87%** | 15.1s |
+
+## 🔄 Maintenance — CNIL Database Updates
+
+The CNIL database evolves regularly (new sanctions, guides, recommendations). A dedicated script handles incremental updates (~1x/month):
+
+```bash
+# Check current database state
+python update_cnil.py --status
+
+# Full update (scraping → classification → chunking → indexing)
+python update_cnil.py
+
+# Preview what would be done without executing
+python update_cnil.py --dry-run
+
+# Only check for modifications on CNIL side
+python update_cnil.py --scrape-only
+
+# Force a full ChromaDB reindexation
+python update_cnil.py --force-reindex
+```
+
+Scraping uses conditional requests (`If-Modified-Since` → `304 Not Modified`) to only re-download modified pages. Subsequent steps (classification, chunking, summaries) automatically detect already-processed documents.
 
 ## 📂 Enterprise Pipeline
 

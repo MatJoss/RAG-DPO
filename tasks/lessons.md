@@ -193,3 +193,30 @@
 - **Pattern** : pour exécuter du Python, utiliser directement `& e:\Projets\RAG-DPO\venv\Scripts\python.exe` dans le terminal
 - **Pattern** : pour installer des packages, utiliser `& e:\Projets\RAG-DPO\venv\Scripts\pip.exe install <package>`
 - **Anti-pattern** : ne JAMAIS utiliser `configure_python_environment`, `install_python_packages`, ou tout outil qui propose de "configurer" l'environnement Python — le venv existe et fonctionne
+
+## LLM Judge : chain-of-thought DÉGRADE les modèles 12B
+- **Problème** : forcer Mistral-Nemo à extraire→comparer→classifier (CoT) le fait basculer en "mode diff de tokens" — il devient hyper-littéral, parsing cassé (scores 0.03/0.00)
+- **Constat** : ce qui marche avec GPT-4 (CoT structuré) rigidifie les 12B
+- **Fix** : jugement global avec paliers fixes, format JSON forcé via Ollama `format='json'`
+- **Règle** : pour les modèles ≤12B, toujours préférer un jugement global court à un raisonnement décomposé
+
+## LLM Judge : format JSON natif Ollama > parsing texte libre
+- **Problème** : les formats "SCORE: X / JUSTIFICATION: Y" sont mal respectés (texte libre, lignes multiples, raisonnement parasite)
+- **Fix** : `format='json'` dans `OllamaProvider.generate()` + parsing `json.loads()` avec fallback texte
+- **Avantage** : parsing 100% fiable, champs structurés, pas d'ambiguïté
+
+## LLM Judge : le score 100 est "psychologiquement bloqué" pour les 12B
+- **Problème** : "tous les éléments essentiels présents" est interprété comme exhaustivité académique — Nemo doute à 5% et descend à 85
+- **Fix** : reformuler "100 = couvre correctement, juridiquement correct et substantiellement complète" + "si tu hésites entre 100 et 85, privilégie 100"
+- **Principe** : les petits modèles sur-pénalisent par prudence, il faut un biais positif contrôlé
+
+## LLM Judge : les garde-fous sémantiques sur la justification = faux positifs
+- **Problème** : détecter "faux/fausse/incorrecte" dans la justification pour forcer score=0 attrape "ne contient PAS d'affirmation fausse" → score 0 sur des réponses parfaites
+- **Impact** : q05 et q07 à 0% LLM alors que le juge avait donné 100
+- **Fix** : supprimer le garde-fou texte, ne garder que le champ JSON `erreur_factuelle: true/false`
+- **Règle** : ne JAMAIS faire de détection de mots-clés sur du texte libre généré par un LLM — trop de faux positifs (négations, contexte inversé)
+
+## Éval : optimiser le thermomètre ≠ optimiser le patient
+- **Constat** : 4 itérations de prompt juge (v5→v5b→v5c→v5d) ont déplacé des points entre questions sans gain net fiable. Chaque ajustement = overfitting sur 18 questions.
+- **Règle** : figer le juge quand il est "raisonnablement calibré" et passer aux vrais gains (pipeline, retrieval, questions faibles)
+- **Seuil** : si le juge donne 100 sur reformulation, ~50-70 sur incomplet, 0 sur erreur → c'est suffisant, on arrête

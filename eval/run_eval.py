@@ -429,18 +429,25 @@ def llm_judge_correctness(
     actual_answer: str,
 ) -> Tuple[float, str]:
     """
-    Utilise le LLM pour juger si la réponse fournie couvre les concepts
-    de la réponse attendue.
+    Utilise le LLM comme juge concept-aware pour évaluer la correctness.
     
-    Avantage vs keyword matching : comprend les synonymes, paraphrases,
-    reformulations ("2 ans" = "24 mois" = "deux années").
+    Évalue si la réponse couvre les CONCEPTS JURIDIQUES de la réponse attendue,
+    indépendamment de la formulation, de l'ordre ou de la structure.
+    
+    Le juge :
+    1. Extrait les concepts clés de la réponse attendue
+    2. Vérifie chaque concept dans la réponse fournie (présent/absent/erroné)
+    3. Détecte les erreurs factuelles ou juridiques
+    4. Produit un score pondéré
     
     Returns:
         (score 0-1, justification)
     """
     provider = _get_llm_judge()
     
-    prompt = f"""Tu es un évaluateur expert en RGPD/CNIL. Compare la réponse fournie avec la réponse attendue.
+    prompt = f"""Tu es un évaluateur expert en droit des données personnelles (RGPD/CNIL).
+
+TÂCHE : Évalue si la réponse fournie couvre les concepts juridiques de la réponse attendue.
 
 Question : {question}
 
@@ -450,21 +457,32 @@ Réponse attendue (référence) :
 Réponse fournie (à évaluer) :
 {actual_answer}
 
-Évalue si la réponse fournie couvre les CONCEPTS CLÉS de la réponse attendue.
-- Ne juge PAS les mots exacts, mais le SENS ("2 ans" = "24 mois" = "deux années")
-- Une réponse qui dit la même chose avec des mots différents est CORRECTE
-- Une réponse partielle (certains concepts manquants) mérite un score proportionnel
-- Une réponse hors-sujet ou incorrecte = 0
+MÉTHODE D'ÉVALUATION :
+1. Identifie chaque CONCEPT JURIDIQUE distinct dans la réponse attendue (obligation, condition, acteur, délai, article, procédure, etc.)
+2. Pour chaque concept, vérifie s'il est couvert dans la réponse fournie — même avec des mots différents, un ordre différent ou une structure différente
+3. Détecte toute ERREUR FACTUELLE (contrevérité juridique, confusion entre concepts, attribution erronée)
+
+RÈGLES DE SCORING :
+- "2 ans" = "24 mois" = "deux années" → concept COUVERT
+- Étapes dans un ordre différent mais toutes présentes → concepts COUVERTS
+- Regroupement de deux points en un seul mais contenu complet → concepts COUVERTS  
+- Concept reformulé avec d'autres mots mais même sens juridique → concept COUVERT
+- Concept totalement absent → MANQUANT (pénalité proportionnelle)
+- Information fausse ou juridiquement incorrecte → ERREUR (pénalité forte : -20 pts par erreur)
+- Information hors-sujet ajoutée mais non fausse → PAS de pénalité
 
 Réponds UNIQUEMENT avec ce format exact :
+CONCEPTS_ATTENDUS: [nombre de concepts identifiés dans la réponse attendue]
+CONCEPTS_COUVERTS: [nombre de concepts couverts dans la réponse fournie]
+ERREURS: [nombre d'erreurs factuelles/juridiques dans la réponse fournie, 0 si aucune]
 SCORE: [nombre entier de 0 à 100]
-JUSTIFICATION: [une phrase courte expliquant le score]"""
+JUSTIFICATION: [une phrase courte expliquant le score, mentionnant les concepts manquants ou erreurs s'il y en a]"""
     
     try:
         response = provider.generate(
             prompt,
             temperature=0.0,
-            max_tokens=150,
+            max_tokens=200,
         )
         
         # Parser la réponse
@@ -474,7 +492,6 @@ JUSTIFICATION: [une phrase courte expliquant le score]"""
         for line in response.strip().split("\n"):
             line = line.strip()
             if line.upper().startswith("SCORE"):
-                # Extraire le nombre
                 import re as _re
                 numbers = _re.findall(r'\d+', line)
                 if numbers:

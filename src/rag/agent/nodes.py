@@ -555,12 +555,84 @@ def make_enrich_node(components: NodeComponents):
                 tool_results["topic_articles"] = unique[:5]
                 logger.info(f"   🏷️  {len(tool_results['topic_articles'])} article(s) par topic")
         
+        # ── 4. Garde-fou confusions sémantiques connues ──
+        # Règles déterministes pour compléter negative_topics
+        # quand le classifier LLM ne les détecte pas.
+        #
+        # Principe : on formalise les frontières juridiques du RGPD
+        # entre concepts sémantiquement proches mais procéduralement distincts.
+        # Ce n'est pas du biais — c'est de la cohérence normative.
+        #
+        # Critères d'inclusion : la confusion doit changer la méthodologie,
+        # pas juste être une différence lexicale.
+        CONFUSION_GUARDS = {
+            # ── AIPD (art. 35) : risque pour les personnes, processus formel ──
+            "aipd": {
+                "negative_topics": [
+                    "aitd", "transfert international", "pays tiers",
+                    "clauses contractuelles types",     # AITD ≠ AIPD
+                    "registre des traitements",         # art.30 ≠ art.35 (description ≠ analyse de risque)
+                    "analyse de risque SSI",            # risque orga ≠ risque personnes
+                    "violation de données",             # ex post ≠ ex ante
+                ],
+                "guard_keywords": [
+                    "transfert", "pays tiers", "international", "aitd", "clause",
+                    "registre", "ebios", "iso 27005", "ssi",
+                    "violation", "breach", "fuite",
+                ],
+            },
+            # ── AITD (art. 46) : transferts internationaux ──
+            "aitd": {
+                "negative_topics": [
+                    "aipd", "analyse d'impact relative", "risque élevé",
+                ],
+                "guard_keywords": ["aipd", "risque élevé", "analyse d'impact relative"],
+            },
+            # ── Violation de données (art. 33-34) : ex post ──
+            "violation": {
+                "negative_topics": ["aipd", "analyse d'impact"],
+                "guard_keywords": ["aipd", "analyse d'impact", "dpia"],
+            },
+            # ── Registre (art. 30) : obligation documentaire ──
+            "registre": {
+                "negative_topics": ["aipd", "analyse d'impact"],
+                "guard_keywords": ["aipd", "analyse d'impact", "dpia", "risque élevé"],
+            },
+            # ── Sous-traitant (art. 28) vs Responsable de traitement (art. 4) ──
+            "sous_traitant": {
+                "negative_topics": ["responsable de traitement"],
+                "guard_keywords": ["responsable de traitement", "responsable du traitement"],
+            },
+            "responsable_traitement": {
+                "negative_topics": ["sous-traitant"],
+                "guard_keywords": ["sous-traitant", "sous traitant", "prestataire"],
+            },
+            # ── Base légale (art. 6) vs Finalité (art. 5) ──
+            "base_legale": {
+                "negative_topics": ["finalité du traitement"],
+                "guard_keywords": ["finalité", "objectif du traitement"],
+            },
+        }
+        
+        if intent:
+            for topic in (intent.topics or []):
+                guard = CONFUSION_GUARDS.get(topic)
+                if guard:
+                    # Ne PAS ajouter les negative_topics si la question mentionne explicitement le sujet confusable
+                    mentions_confusable = any(kw in q_lower for kw in guard["guard_keywords"])
+                    if not mentions_confusable:
+                        existing = set(intent.negative_topics or [])
+                        added = [t for t in guard["negative_topics"] if t not in existing]
+                        if added:
+                            intent.negative_topics = list(existing) + added
+                            logger.info(f"   🛡️  Garde-fou confusion: +{added} pour topic '{topic}'")
+        
         if tool_results:
             logger.info(f"   ✅ Enrichissement: {list(tool_results.keys())}")
         else:
             logger.info(f"   ∅ Aucun enrichissement applicable")
         
-        return {"tool_results": tool_results if tool_results else None}
+        return {"tool_results": tool_results if tool_results else None, "intent": intent}
     
     return enrich
 

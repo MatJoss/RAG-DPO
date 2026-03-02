@@ -295,7 +295,11 @@ def main():
             "timestamp": now,
         })
 
+        # ── Génération ──
         with st.chat_message("assistant"):
+            # Spinner SEUL pour l'attente — le rendu se fait APRÈS
+            response = None
+            query_error = None
             with st.spinner("🤔 Recherche et analyse en cours..."):
                 try:
                     active_pipeline = agent_pipeline if use_agent else pipeline
@@ -307,68 +311,72 @@ def main():
                         n_documents=params["n_documents"],
                         n_chunks_per_doc=params["n_chunks_per_doc"],
                     )
-
-                    if response.error:
-                        st.error(f"❌ {response.error}")
-                        logger.warning(
-                            f"Query error: {response.error}",
-                            extra={"event": "query_error", "question": prompt, "error": response.error}
-                        )
-                    else:
-                        resp_time = datetime.now().strftime("%H:%M")
-                        st.markdown(f'<div class="msg-time">{resp_time}</div>', unsafe_allow_html=True)
-                        st.markdown(response.answer)
-
-                        st.caption(
-                            f"⏱️ {response.total_time:.1f}s "
-                            f"| 📚 {len(response.sources)} sources "
-                            f"| ✅ {len(response.cited_sources)} citées"
-                            f"{'  | 🤖 Agent' if use_agent else ''}"
-                        )
-
-                        render_sources_block(response.sources)
-
-                        # Log
-                        answer_hash = hashlib.md5(response.answer.encode()).hexdigest()[:8]
-                        query_logger.log_query(
-                            question=prompt,
-                            response=response,
-                            enterprise_tags=selected_enterprise_tags or None,
-                            depth=depth,
-                            filter_nature=filter_nature or None,
-                        )
-
-                        logger.info(
-                            f"Query OK: {prompt[:80]}",
-                            extra={
-                                "event": "query_success",
-                                "question": prompt,
-                                "total_time": response.total_time,
-                                "n_sources": len(response.sources),
-                                "n_cited": len(response.cited_sources),
-                                "model": response.model,
-                            }
-                        )
-
-                        # Stocker pour replay
-                        st.session_state.messages.append({
-                            "role": "assistant",
-                            "content": response.answer,
-                            "timestamp": resp_time,
-                            "sources": response.sources,
-                            "answer_hash": answer_hash,
-                            "question": prompt,
-                        })
-                        st.session_state.conversation_history.append({
-                            "role": "user", "content": prompt
-                        })
-                        st.session_state.conversation_history.append({
-                            "role": "assistant", "content": response.answer
-                        })
-
                 except Exception as e:
-                    st.error(f"❌ Erreur inattendue : {e}")
+                    query_error = e
                     logger.error(f"Query exception: {e}", exc_info=True)
+
+            # ── Rendu EN DEHORS du spinner ──
+            if query_error:
+                st.error(f"❌ Erreur inattendue : {query_error}")
+            elif response and response.error:
+                st.error(f"❌ {response.error}")
+                logger.warning(
+                    f"Query error: {response.error}",
+                    extra={"event": "query_error", "question": prompt, "error": response.error}
+                )
+            elif response:
+                resp_time = datetime.now().strftime("%H:%M")
+                answer_hash = hashlib.md5(response.answer.encode()).hexdigest()[:8]
+
+                # Affichage
+                st.markdown(f'<div class="msg-time">{resp_time}</div>', unsafe_allow_html=True)
+                st.markdown(response.answer)
+
+                st.caption(
+                    f"⏱️ {response.total_time:.1f}s "
+                    f"| 📚 {len(response.sources)} sources "
+                    f"| ✅ {len(response.cited_sources)} citées"
+                    f"{'  | 🤖 Agent' if use_agent else ''}"
+                )
+
+                render_sources_block(response.sources)
+
+                # Persister en session_state
+                st.session_state.messages.append({
+                    "role": "assistant",
+                    "content": response.answer,
+                    "timestamp": resp_time,
+                    "sources": response.sources,
+                    "answer_hash": answer_hash,
+                    "question": prompt,
+                })
+                st.session_state.conversation_history.append({
+                    "role": "user", "content": prompt
+                })
+                st.session_state.conversation_history.append({
+                    "role": "assistant", "content": response.answer
+                })
+
+                # Log (non critique)
+                query_logger.log_query(
+                    question=prompt,
+                    response=response,
+                    enterprise_tags=selected_enterprise_tags or None,
+                    depth=depth,
+                    filter_nature=filter_nature or None,
+                )
+
+                logger.info(
+                    f"Query OK: {prompt[:80]}",
+                    extra={
+                        "event": "query_success",
+                        "question": prompt,
+                        "total_time": response.total_time,
+                        "n_sources": len(response.sources),
+                        "n_cited": len(response.cited_sources),
+                        "model": response.model,
+                    }
+                )
 
     # Footer
     st.markdown("---")

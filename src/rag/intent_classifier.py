@@ -70,7 +70,10 @@ Règles JSON :
 - scope_international : true SEULEMENT si pays étranger, transfert hors UE, ou clauses contractuelles types mentionnés
 - needs_methodology : true si démarche multi-étapes réellement demandée
 - topics : 1-3 sujets RGPD de la question (vide si hors périmètre)
-- negative_topics : sujets à NE PAS aborder
+- negative_topics : sujets RGPD proches mais HORS SUJET à ne PAS confondre ni aborder. Exemples :
+  - Question sur l'AIPD (art.35) → negative_topics: ["aitd", "transfert international", "pays tiers", "clauses contractuelles types"]
+  - Question sur le sous-traitant → negative_topics: ["responsable de traitement"] (si pas comparaison)
+  - Question sur le droit d'accès → negative_topics: ["droit à l'effacement"] (si pas liste exhaustive)
 
 JSON :"""
 

@@ -51,11 +51,11 @@ logger = logging.getLogger(__name__)
 # Graph Builder
 # ═══════════════════════════════════════════════════════════════
 
-def build_graph(components: NodeComponents) -> StateGraph:
+def build_graph(components: NodeComponents, config: Optional[Dict] = None) -> StateGraph:
     """Construit le graphe LangGraph à partir des composants.
     
-    Architecture :
-        rewrite → classify → enrich → retrieve → generate → expert_refinement → validate → check_completeness → respond
+    Architecture (expert_refinement optionnel via config) :
+        rewrite → classify → enrich → retrieve → generate → [expert_refinement] → validate → check_completeness → respond
                                            ↑                          ↑                                  │
                                            │                          └── (grounding retry) ─────────────┤
                                            └── (completeness re-retrieve) ───────────────────────────────┘
@@ -68,10 +68,15 @@ def build_graph(components: NodeComponents) -> StateGraph:
     graph.add_node("enrich", make_enrich_node(components))
     graph.add_node("retrieve", make_retrieve_node(components))
     graph.add_node("generate", make_generate_node(components))
-    graph.add_node("expert_refinement", make_expert_refinement_node(components))
     graph.add_node("validate", make_validate_node(components))
     graph.add_node("check_completeness", make_check_completeness_node(components))
     graph.add_node("respond", make_respond_node(components))
+    
+    # ── Expert refinement (optionnel, config.yaml: rag.enable_expert_refinement) ──
+    _cfg = config or {}
+    enable_refinement = _cfg.get("rag", {}).get("enable_expert_refinement", False)
+    if enable_refinement:
+        graph.add_node("expert_refinement", make_expert_refinement_node(components))
     
     # ── Arêtes ──
     graph.add_edge(START, "rewrite")
@@ -79,8 +84,12 @@ def build_graph(components: NodeComponents) -> StateGraph:
     graph.add_edge("classify", "enrich")
     graph.add_edge("enrich", "retrieve")
     graph.add_edge("retrieve", "generate")
-    graph.add_edge("generate", "expert_refinement")
-    graph.add_edge("expert_refinement", "validate")
+    
+    if enable_refinement:
+        graph.add_edge("generate", "expert_refinement")
+        graph.add_edge("expert_refinement", "validate")
+    else:
+        graph.add_edge("generate", "validate")
     
     # Routage conditionnel après validation (grounding retry)
     def should_retry(state: RAGState) -> str:
@@ -142,11 +151,13 @@ class RAGAgentPipeline:
     Expose la même API query() que RAGPipeline pour compatibilité.
     """
     
-    def __init__(self, components: NodeComponents):
+    def __init__(self, components: NodeComponents, config: Optional[Dict] = None):
         self.components = components
-        graph = build_graph(components)
+        self.config = config or {}
+        graph = build_graph(components, config=self.config)
         self.app = graph.compile()
-        logger.info("✅ [Agent] Graphe LangGraph compilé")
+        refinement_status = "ON" if self.config.get("rag", {}).get("enable_expert_refinement", False) else "OFF"
+        logger.info(f"✅ [Agent] Graphe LangGraph compilé (expert_refinement={refinement_status})")
     
     def query(
         self,
@@ -376,6 +387,14 @@ def create_agent_pipeline(
         max_retries=max_retries,
     )
     
+    # ── Config (pour toggles optionnels comme expert_refinement) ──
+    config_path = Path(__file__).parent.parent.parent.parent / "configs" / "config.yaml"
+    config = {}
+    if config_path.exists():
+        import yaml
+        with open(config_path, "r", encoding="utf-8") as f:
+            config = yaml.safe_load(f) or {}
+    
     init_time = time.time() - init_start
     logger.info(
         f"✅ [Agent] Pipeline LangGraph initialisé en {init_time:.1f}s "
@@ -383,4 +402,4 @@ def create_agent_pipeline(
         f"retry_loop={max_retries}x)"
     )
     
-    return RAGAgentPipeline(components)
+    return RAGAgentPipeline(components, config=config)

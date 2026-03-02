@@ -72,6 +72,9 @@ rag:
   enable_validation: true
   relevance_threshold: 0.80      # Calibré pour bge-reranker-v2-m3 (scores 0-1, pertinent ~0.2-0.8)
   
+  # Expert refinement (reformulation DPO senior post-génération)
+  enable_expert_refinement: false  # Coût: +1 appel LLM (~30-45s), qualité perçue ↑ mais score eval ≈
+
   # Génération
   temperature: 0.0              # Factuel strict
 

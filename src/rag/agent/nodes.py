@@ -367,6 +367,164 @@ def make_generate_node(components: NodeComponents):
     return generate
 
 
+# ═══════════════════════════════════════════════════════════════
+# Expert Refinement node
+# ═══════════════════════════════════════════════════════════════
+
+# Prompts adaptés par intent — le refinement ne change pas le fond,
+# il restructure la forme pour un lecteur DPO senior.
+EXPERT_REFINEMENT_PROMPTS = {
+    "methodologique": """Tu es un DPO senior. Reformule cette réponse pour un comité de direction.
+
+RÈGLES ABSOLUES :
+1. NE SUPPRIME et N'AJOUTE aucune information factuelle
+2. Conserve TOUS les [Source N] exactement comme ils sont
+3. Restructure pour la prise de décision : qui fait quoi, dans quel ordre, avec quel livrable
+4. Remplace le ton pédagogique par un ton opérationnel
+5. Si des étapes sont listées, ajoute pour chacune : le responsable attendu et le livrable
+6. Supprime les définitions évidentes pour un professionnel ("le RGPD est...", "une AIPD est...")
+
+RÉPONSE À REFORMULER :
+{answer}
+
+RÉPONSE REFORMULÉE :""",
+
+    "factuel": """Tu es un DPO senior. Reformule cette réponse pour être directement actionnable.
+
+RÈGLES ABSOLUES :
+1. NE SUPPRIME et N'AJOUTE aucune information factuelle
+2. Conserve TOUS les [Source N] exactement comme ils sont
+3. Va droit au fait : obligation, base légale, conséquence
+4. Supprime les phrases introductives et conclusives génériques
+5. Si pertinent, termine par "Point de vigilance :" avec le risque principal
+
+RÉPONSE À REFORMULER :
+{answer}
+
+RÉPONSE REFORMULÉE :""",
+
+    "organisationnel": """Tu es un DPO senior. Reformule cette réponse en matrice RACI implicite.
+
+RÈGLES ABSOLUES :
+1. NE SUPPRIME et N'AJOUTE aucune information factuelle
+2. Conserve TOUS les [Source N] exactement comme ils sont
+3. Pour chaque acteur mentionné, clarifie son rôle : Responsable / Consulté / Informé
+4. Supprime les généralités pédagogiques
+5. Structure par acteur ou par phase, pas par concept
+
+RÉPONSE À REFORMULER :
+{answer}
+
+RÉPONSE REFORMULÉE :""",
+
+    "cas_pratique": """Tu es un DPO senior. Reformule cette réponse comme une note de conseil interne.
+
+RÈGLES ABSOLUES :
+1. NE SUPPRIME et N'AJOUTE aucune information factuelle
+2. Conserve TOUS les [Source N] exactement comme ils sont
+3. Structure : Analyse → Risque → Recommandation → Action immédiate
+4. Supprime le ton explicatif, adopte un ton de note juridique
+5. Termine par les actions concrètes à mener
+
+RÉPONSE À REFORMULER :
+{answer}
+
+RÉPONSE REFORMULÉE :""",
+}
+
+# Intents qui ne bénéficient PAS du refinement
+# (listes = déjà structurées, comparaisons = déjà binaires, refus = court)
+SKIP_REFINEMENT_INTENTS = {"liste_exhaustive", "comparaison", "refus"}
+
+
+def make_expert_refinement_node(components: NodeComponents):
+    """Crée le nœud de reformulation experte post-génération.
+    
+    Reformule la réponse brute du LLM en une réponse de niveau DPO senior :
+    - Supprime le ton pédagogique ("le RGPD est un règlement qui...")
+    - Restructure pour la prise de décision
+    - Conserve 100% des faits et des citations [Source N]
+    
+    Position dans le graphe : generate → **expert_refinement** → validate
+    
+    Coût : ~3-5s, même modèle, 0 VRAM supplémentaire.
+    Ne s'applique PAS aux intents liste_exhaustive, comparaison, refus.
+    """
+    
+    def expert_refinement(state: RAGState) -> Dict[str, Any]:
+        answer = state.get("answer", "")
+        intent = state.get("intent")
+        error = state.get("error")
+        
+        # Skip si erreur ou réponse trop courte
+        if error or len(answer) < 100:
+            return {}
+        
+        # Skip pour certains intents (déjà bien structurés)
+        intent_type = intent.intent if intent else "factuel"
+        if intent_type in SKIP_REFINEMENT_INTENTS:
+            logger.info(f"🎓 [Agent] Phase 3b : Expert Refinement — skip (intent={intent_type})")
+            return {}
+        
+        logger.info(f"🎓 [Agent] Phase 3b : Expert Refinement (intent={intent_type})")
+        
+        # Sélectionner le prompt adapté à l'intent
+        prompt_template = EXPERT_REFINEMENT_PROMPTS.get(
+            intent_type, EXPERT_REFINEMENT_PROMPTS["factuel"]
+        )
+        prompt = prompt_template.format(answer=answer)
+        
+        try:
+            refinement_start = time.time()
+            refined = components.generator.llm_provider.chat(
+                messages=[
+                    {"role": "system", "content": "Tu reformules des réponses RGPD pour des DPO seniors. Tu ne changes JAMAIS le fond, seulement la forme et la structure."},
+                    {"role": "user", "content": prompt},
+                ],
+                model=components.generator.model,
+                temperature=0.0,
+                max_tokens=2000,
+            ).strip()
+            refinement_time = time.time() - refinement_start
+            
+            # Vérifications de sécurité
+            if not refined or len(refined) < 50:
+                logger.warning(f"   ⚠️ Refinement trop court ({len(refined)} chars), on garde l'original")
+                return {}
+            
+            # Vérifier que les [Source N] sont conservées
+            import re
+            original_sources = set(re.findall(r'\[Source \d+\]', answer))
+            refined_sources = set(re.findall(r'\[Source \d+\]', refined))
+            lost_sources = original_sources - refined_sources
+            
+            if lost_sources:
+                logger.warning(
+                    f"   ⚠️ Refinement a perdu {len(lost_sources)} source(s): {lost_sources}, on garde l'original"
+                )
+                return {}
+            
+            # Vérifier que la réponse n'a pas explosé en taille (signe d'hallucination)
+            if len(refined) > len(answer) * 1.8:
+                logger.warning(
+                    f"   ⚠️ Refinement trop long ({len(refined)} vs {len(answer)} chars), on garde l'original"
+                )
+                return {}
+            
+            logger.info(
+                f"   ✅ Refinement: {len(answer)} → {len(refined)} chars "
+                f"({refined_sources} sources conservées) en {refinement_time:.1f}s"
+            )
+            
+            return {"answer": refined}
+            
+        except Exception as e:
+            logger.warning(f"   ⚠️ Erreur refinement: {e}, on garde l'original")
+            return {}
+    
+    return expert_refinement
+
+
 def make_validate_node(components: NodeComponents):
     """Crée le nœud de validation grounding."""
     

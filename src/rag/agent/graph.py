@@ -3,9 +3,9 @@ RAG Agent Graph — Définition du StateGraph LangGraph.
 
 Graphe d'états avec routage conditionnel et tools :
 
-    START → rewrite → classify → enrich → retrieve → generate → validate ─→ check_completeness ─→ respond → END
-                                                ↑                                       │
-                                                └──── (retry: re-retrieve ciblé) ───────┘
+    START → rewrite → classify → enrich → retrieve → generate → expert_refinement → validate ─→ check_completeness ─→ respond → END
+                                                ↑                                                          │
+                                                └──── (retry: re-retrieve ciblé) ──────────────────────────┘
 
 Le nœud rewrite résout les références multi-turn ("et pour eux ?",
 "les mêmes conditions ?") en reformulant la question en autonome.
@@ -35,6 +35,7 @@ from .nodes import (
     make_check_completeness_node,
     make_classify_node,
     make_enrich_node,
+    make_expert_refinement_node,
     make_generate_node,
     make_respond_node,
     make_retrieve_node,
@@ -54,10 +55,10 @@ def build_graph(components: NodeComponents) -> StateGraph:
     """Construit le graphe LangGraph à partir des composants.
     
     Architecture :
-        rewrite → classify → enrich → retrieve → generate → validate → check_completeness → respond
-                                           ↑           ↑                        │
-                                           │           └── (grounding retry) ───┤
-                                           └── (completeness re-retrieve) ──────┘
+        rewrite → classify → enrich → retrieve → generate → expert_refinement → validate → check_completeness → respond
+                                           ↑                          ↑                                  │
+                                           │                          └── (grounding retry) ─────────────┤
+                                           └── (completeness re-retrieve) ───────────────────────────────┘
     """
     graph = StateGraph(RAGState)
     
@@ -67,6 +68,7 @@ def build_graph(components: NodeComponents) -> StateGraph:
     graph.add_node("enrich", make_enrich_node(components))
     graph.add_node("retrieve", make_retrieve_node(components))
     graph.add_node("generate", make_generate_node(components))
+    graph.add_node("expert_refinement", make_expert_refinement_node(components))
     graph.add_node("validate", make_validate_node(components))
     graph.add_node("check_completeness", make_check_completeness_node(components))
     graph.add_node("respond", make_respond_node(components))
@@ -77,7 +79,8 @@ def build_graph(components: NodeComponents) -> StateGraph:
     graph.add_edge("classify", "enrich")
     graph.add_edge("enrich", "retrieve")
     graph.add_edge("retrieve", "generate")
-    graph.add_edge("generate", "validate")
+    graph.add_edge("generate", "expert_refinement")
+    graph.add_edge("expert_refinement", "validate")
     
     # Routage conditionnel après validation (grounding retry)
     def should_retry(state: RAGState) -> str:

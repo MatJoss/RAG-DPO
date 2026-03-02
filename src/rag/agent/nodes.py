@@ -452,6 +452,8 @@ def make_expert_refinement_node(components: NodeComponents):
     """
     
     def expert_refinement(state: RAGState) -> Dict[str, Any]:
+        import re
+        
         answer = state.get("answer", "")
         intent = state.get("intent")
         error = state.get("error")
@@ -464,6 +466,13 @@ def make_expert_refinement_node(components: NodeComponents):
         intent_type = intent.intent if intent else "factuel"
         if intent_type in SKIP_REFINEMENT_INTENTS:
             logger.info(f"🎓 [Agent] Phase 3b : Expert Refinement — skip (intent={intent_type})")
+            return {}
+        
+        # Skip si la réponse n'a AUCUNE citation [Source N]
+        # → pas la peine de reformuler un texte déjà non-groundé, ça le gonfle inutilement
+        original_sources = set(re.findall(r'\[Source \d+\]', answer))
+        if not original_sources:
+            logger.info(f"🎓 [Agent] Phase 3b : Expert Refinement — skip (aucune source dans la réponse)")
             return {}
         
         logger.info(f"🎓 [Agent] Phase 3b : Expert Refinement (intent={intent_type})")
@@ -493,8 +502,6 @@ def make_expert_refinement_node(components: NodeComponents):
                 return {}
             
             # Vérifier que les [Source N] sont conservées
-            import re
-            original_sources = set(re.findall(r'\[Source \d+\]', answer))
             refined_sources = set(re.findall(r'\[Source \d+\]', refined))
             lost_sources = original_sources - refined_sources
             
@@ -505,9 +512,11 @@ def make_expert_refinement_node(components: NodeComponents):
                 return {}
             
             # Vérifier que la réponse n'a pas explosé en taille (signe d'hallucination)
-            if len(refined) > len(answer) * 1.8:
+            # Double garde-fou : ratio relatif (1.8x) ET seuil absolu (+500 chars)
+            max_allowed = min(len(answer) * 1.8, len(answer) + 500)
+            if len(refined) > max_allowed:
                 logger.warning(
-                    f"   ⚠️ Refinement trop long ({len(refined)} vs {len(answer)} chars), on garde l'original"
+                    f"   ⚠️ Refinement trop long ({len(refined)} vs {len(answer)} chars, max={int(max_allowed)}), on garde l'original"
                 )
                 return {}
             

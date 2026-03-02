@@ -124,9 +124,10 @@ class OllamaProvider(BaseLLMProvider):
             raise RuntimeError("Ollama n'est pas disponible. Lancez 'ollama serve'")
         
         model = kwargs.get('model', self.model)
+        response_format = kwargs.get('format', None)
         
         try:
-            response = self.client.generate(
+            gen_kwargs = dict(
                 model=model,
                 prompt=prompt,
                 options={
@@ -135,6 +136,10 @@ class OllamaProvider(BaseLLMProvider):
                     'num_ctx': 16384,
                 }
             )
+            if response_format:
+                gen_kwargs['format'] = response_format
+            
+            response = self.client.generate(**gen_kwargs)
             return response['response']
         
         except Exception as e:

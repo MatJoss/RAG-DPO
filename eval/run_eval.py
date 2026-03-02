@@ -429,25 +429,21 @@ def llm_judge_correctness(
     actual_answer: str,
 ) -> Tuple[float, str]:
     """
-    Utilise le LLM comme juge concept-aware pour évaluer la correctness.
+    Juge concept-aware optimisé pour Mistral-Nemo 12B.
     
-    Évalue si la réponse couvre les CONCEPTS JURIDIQUES de la réponse attendue,
-    indépendamment de la formulation, de l'ordre ou de la structure.
+    Stratégie : jugement global avec paliers fixes (pas de chain-of-thought
+    détaillé qui rigidifie les modèles mid-size en mode diff-de-tokens).
     
-    Le juge :
-    1. Extrait les concepts clés de la réponse attendue
-    2. Vérifie chaque concept dans la réponse fournie (présent/absent/erroné)
-    3. Détecte les erreurs factuelles ou juridiques
-    4. Produit un score pondéré
+    Paliers : 100 / 85 / 70 / 50 / 30 / 0
     
     Returns:
         (score 0-1, justification)
     """
     provider = _get_llm_judge()
     
-    prompt = f"""Tu es un évaluateur expert en droit des données personnelles (RGPD/CNIL).
-
-TÂCHE : Évalue si la réponse fournie couvre les concepts juridiques de la réponse attendue.
+    prompt = f"""Tu es un évaluateur juridique spécialisé en RGPD.
+Compare la réponse fournie avec la réponse attendue.
+Juge le SENS et la COUVERTURE, jamais la formulation.
 
 Question : {question}
 
@@ -457,48 +453,66 @@ Réponse attendue (référence) :
 Réponse fournie (à évaluer) :
 {actual_answer}
 
-MÉTHODE D'ÉVALUATION :
-1. Identifie chaque CONCEPT JURIDIQUE distinct dans la réponse attendue (obligation, condition, acteur, délai, article, procédure, etc.)
-2. Pour chaque concept, vérifie s'il est couvert dans la réponse fournie — même avec des mots différents, un ordre différent ou une structure différente
-3. Détecte toute ERREUR FACTUELLE (contrevérité juridique, confusion entre concepts, attribution erronée)
+RÈGLE 1 — NE PÉNALISE JAMAIS pour :
+- Reformulation différente (c'est normal et attendu)
+- Formulation plus détaillée ou plus synthétique
+- Ordre différent des éléments
+- Information supplémentaire correcte
+- Équivalences : "RGPD"="GDPR", "2 ans"="24 mois", "données sensibles"="catégories particulières", "grande échelle"="traitement massif", "RT"="responsable de traitement"
 
-RÈGLES DE SCORING :
-- "2 ans" = "24 mois" = "deux années" → concept COUVERT
-- Étapes dans un ordre différent mais toutes présentes → concepts COUVERTS
-- Regroupement de deux points en un seul mais contenu complet → concepts COUVERTS  
-- Concept reformulé avec d'autres mots mais même sens juridique → concept COUVERT
-- Concept totalement absent → MANQUANT (pénalité proportionnelle)
-- Information fausse ou juridiquement incorrecte → ERREUR (pénalité forte : -20 pts par erreur)
-- Information hors-sujet ajoutée mais non fausse → PAS de pénalité
+RÈGLE 2 — erreur_factuelle :
+true = la réponse affirme quelque chose de FAUX (ex: "le DPO doit être avocat", "tous les organismes doivent nommer un DPO", "la CNIL réalise les AIPD")
+false = aucune affirmation fausse
 
-Réponds UNIQUEMENT avec ce format exact :
-CONCEPTS_ATTENDUS: [nombre de concepts identifiés dans la réponse attendue]
-CONCEPTS_COUVERTS: [nombre de concepts couverts dans la réponse fournie]
-ERREURS: [nombre d'erreurs factuelles/juridiques dans la réponse fournie, 0 si aucune]
-SCORE: [nombre entier de 0 à 100]
-JUSTIFICATION: [une phrase courte expliquant le score, mentionnant les concepts manquants ou erreurs s'il y en a]"""
+RÈGLE 3 — BARÈME :
+Si erreur_factuelle=true → score=0 (TOUJOURS)
+Si erreur_factuelle=false :
+  100 = la réponse couvre correctement les éléments essentiels sans erreur. Une légère imprécision ou une formulation incomplète n'empêche PAS le score 100.
+  85 = un détail secondaire manque
+  70 = plusieurs détails secondaires manquent
+  50 = un élément essentiel manque (ex: 3 bases sur 6 listées)
+  30 = la majorité des éléments essentiels manquent
+
+IMPORTANT : si tu hésites entre 100 et 85, privilégie 100.
+
+Réponds en JSON :
+{{"erreur_factuelle": true/false, "score": 0-100, "justification": "..."}}"""
     
     try:
         response = provider.generate(
             prompt,
             temperature=0.0,
-            max_tokens=200,
+            max_tokens=150,
+            format='json',
         )
         
-        # Parser la réponse
+        # Parser la réponse JSON
+        import json as _json
         score = 0.0
         justification = "Parsing failed"
         
-        for line in response.strip().split("\n"):
-            line = line.strip()
-            if line.upper().startswith("SCORE"):
-                import re as _re
-                numbers = _re.findall(r'\d+', line)
-                if numbers:
-                    raw_score = int(numbers[0])
-                    score = max(0.0, min(1.0, raw_score / 100.0))
-            elif line.upper().startswith("JUSTIFICATION"):
-                justification = line.split(":", 1)[-1].strip()
+        try:
+            data = _json.loads(response.strip())
+            raw_score = int(data.get("score", 0))
+            score = max(0.0, min(1.0, raw_score / 100.0))
+            justification = data.get("justification", "")
+            
+            # Garde-fou : si erreur_factuelle=true, forcer score = 0
+            if data.get("erreur_factuelle", False) and score > 0.30:
+                score = 0.0
+        except (_json.JSONDecodeError, ValueError, TypeError) as parse_err:
+            # Fallback: tenter parsing texte classique
+            logger.warning(f"⚠️  JSON parse failed, fallback texte: {parse_err}")
+            import re as _re
+            for line in response.strip().split("\n"):
+                line = line.strip()
+                if line.upper().startswith("SCORE") or '"score"' in line.lower():
+                    numbers = _re.findall(r'\d+', line)
+                    if numbers:
+                        raw_score = int(numbers[0])
+                        score = max(0.0, min(1.0, raw_score / 100.0))
+                elif line.upper().startswith("JUSTIFICATION") or '"justification"' in line.lower():
+                    justification = line.split(":", 1)[-1].strip().strip('",')
         
         return score, justification
         

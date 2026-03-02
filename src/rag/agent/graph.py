@@ -189,12 +189,40 @@ class RAGAgentPipeline:
         
         # Convertir le state final en RAGResponse
         context = final_state.get("context_used") or {}
-        sources = context.get("sources_metadata", [])
+        raw_sources = context.get("sources_metadata", [])
         
         # Extraire les citations [Source X] de la réponse
         import re
         answer = final_state.get("answer", "")
         cited = sorted(set(int(s) for s in re.findall(r"Source\s+(\d+)", answer)))
+        
+        # Normaliser les sources pour l'UI (même format que le pipeline natif)
+        sources = []
+        for src in raw_sources:
+            # Extraire locations depuis chunks
+            locations = []
+            for chunk in src.get("chunks", []):
+                loc_parts = []
+                if chunk.get("heading"):
+                    loc_parts.append(chunk["heading"][:80])
+                if chunk.get("page_info"):
+                    loc_parts.append(chunk["page_info"])
+                if loc_parts:
+                    locations.append(" | ".join(loc_parts))
+            
+            sources.append({
+                "id": src["id"],
+                "path": src.get("document_path", ""),
+                "url": src.get("source_url", src.get("document_path", "")),
+                "parent_url": src.get("parent_url", ""),
+                "nature": src.get("nature", ""),
+                "origin": src.get("origin", "CNIL"),
+                "file_type": src.get("file_type", ""),
+                "title": src.get("title", ""),
+                "score": src.get("avg_similarity", 0.0),
+                "locations": locations,
+                "cited": src["id"] in cited,
+            })
         
         return RAGResponse(
             answer=answer,

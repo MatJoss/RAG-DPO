@@ -145,7 +145,7 @@ def main():
             st.subheader("🤖 Mode Pipeline")
             use_agent = st.toggle(
                 "Agent LangGraph",
-                value=False,
+                value=True,
                 help="Active le pipeline agent (LangGraph) avec boucle de validation"
             )
             if use_agent:

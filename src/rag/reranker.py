@@ -44,6 +44,7 @@ class CrossEncoderReranker:
         batch_size: int = 32,
         max_length: int = 512,   # Max tokens pour le cross-encoder
         trust_remote_code: bool = True,  # Requis pour Jina
+        min_score: float = 0.08,  # Score minimum pour garder un chunk
     ):
         """
         Args:
@@ -52,12 +53,14 @@ class CrossEncoderReranker:
             batch_size: Taille de batch pour l'inférence
             max_length: Longueur max des séquences
             trust_remote_code: Autoriser l'exécution de code custom du modèle
+            min_score: Score minimum de reranking pour garder un chunk (filtre le bruit)
         """
         self.model_name = model_name
         self.device = device
         self.batch_size = batch_size
         self.max_length = max_length
         self.trust_remote_code = trust_remote_code
+        self.min_score = min_score
         self._model = None
         self._is_loaded = False
     
@@ -176,7 +179,18 @@ class CrossEncoderReranker:
                     f"moved {abs(movement)} positions (score={r.rerank_score:.3f})"
                 )
         
-        result = ranked[:top_k]
+        # Filtrer par score minimum (élimine le bruit non pertinent)
+        result = [r for r in ranked[:top_k] if r.rerank_score >= self.min_score]
+        
+        # Garder au moins 3 chunks même si sous le seuil (fallback)
+        if len(result) < 3 and len(ranked) >= 3:
+            result = ranked[:3]
+        
+        filtered_count = min(top_k, len(ranked)) - len(result)
+        if filtered_count > 0:
+            logger.info(
+                f"   🔽 {filtered_count} chunk(s) filtrés (score < {self.min_score})"
+            )
         
         logger.info(
             f"✅ Reranking: {len(chunks)} → {len(result)} chunks "

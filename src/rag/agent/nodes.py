@@ -610,7 +610,10 @@ def make_check_completeness_node(components: NodeComponents):
                 f"Manquant: {result.get('missing_aspects', [])}"
             )
         
-        return {"completeness": result}
+        # Incrémenter retry_count pour éviter boucle infinie sur re-retrieval
+        new_retry = retry_count + 1 if not (result["is_complete"] or result.get("coverage_pct", 100) >= 80) else retry_count
+        
+        return {"completeness": result, "retry_count": new_retry}
     
     return check_completeness
 

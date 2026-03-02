@@ -371,78 +371,42 @@ def make_generate_node(components: NodeComponents):
 # Expert Refinement node
 # ═══════════════════════════════════════════════════════════════
 
-# Prompts adaptés par intent — le refinement ne change pas le fond,
-# il restructure la forme pour un lecteur DPO senior.
-EXPERT_REFINEMENT_PROMPTS = {
-    "methodologique": """Tu es un DPO senior. Reformule cette réponse pour un comité de direction.
+# Prompt unique de polishing contraint — ne restructure PAS, polit seulement.
+# Contrairement à l'ancien "expert rewriting" (4 prompts par intent),
+# ce prompt interdit tout changement d'ordre, de structure ou de livrables.
+STRUCTURAL_POLISHING_PROMPT = """Polis cette réponse RGPD pour un DPO senior. Tu NE RESTRUCTURES PAS, tu POLIS.
 
-RÈGLES ABSOLUES :
-1. NE SUPPRIME et N'AJOUTE aucune information factuelle
-2. Conserve TOUS les [Source N] exactement comme ils sont
-3. Restructure pour la prise de décision : qui fait quoi, dans quel ordre, avec quel livrable
-4. Remplace le ton pédagogique par un ton opérationnel
-5. Si des étapes sont listées, ajoute pour chacune : le responsable attendu et le livrable
-6. Supprime les définitions évidentes pour un professionnel ("le RGPD est...", "une AIPD est...")
+RÈGLES ABSOLUES — toute violation = rejet :
+1. NE CHANGE PAS l'ordre des sections ou des étapes
+2. NE SUPPRIME aucun livrable, aucune référence normative (article, décret, délibération)
+3. NE SUPPRIME et N'AJOUTE aucune information factuelle
+4. Conserve TOUS les [Source N] exactement où ils sont
+5. NE RÉORDONNE PAS les points numérotés
 
-RÉPONSE À REFORMULER :
+CE QUE TU PEUX FAIRE :
+- Supprimer les phrases introductives pédagogiques ("Le RGPD est un règlement qui...", "Il est important de noter que...")
+- Supprimer les conclusions génériques ("En suivant ces étapes, vous...", "N'hésitez pas à...")
+- Supprimer les répétitions exactes d'une même information
+- Clarifier les formulations ambiguës en les rendant plus directes
+- Supprimer les définitions évidentes pour un professionnel
+
+RÉPONSE À POLIR :
 {answer}
 
-RÉPONSE REFORMULÉE :""",
+RÉPONSE POLIE :"""
 
-    "factuel": """Tu es un DPO senior. Reformule cette réponse pour être directement actionnable.
-
-RÈGLES ABSOLUES :
-1. NE SUPPRIME et N'AJOUTE aucune information factuelle
-2. Conserve TOUS les [Source N] exactement comme ils sont
-3. Va droit au fait : obligation, base légale, conséquence
-4. Supprime les phrases introductives et conclusives génériques
-5. Si pertinent, termine par "Point de vigilance :" avec le risque principal
-
-RÉPONSE À REFORMULER :
-{answer}
-
-RÉPONSE REFORMULÉE :""",
-
-    "organisationnel": """Tu es un DPO senior. Reformule cette réponse en matrice RACI implicite.
-
-RÈGLES ABSOLUES :
-1. NE SUPPRIME et N'AJOUTE aucune information factuelle
-2. Conserve TOUS les [Source N] exactement comme ils sont
-3. Pour chaque acteur mentionné, clarifie son rôle : Responsable / Consulté / Informé
-4. Supprime les généralités pédagogiques
-5. Structure par acteur ou par phase, pas par concept
-
-RÉPONSE À REFORMULER :
-{answer}
-
-RÉPONSE REFORMULÉE :""",
-
-    "cas_pratique": """Tu es un DPO senior. Reformule cette réponse comme une note de conseil interne.
-
-RÈGLES ABSOLUES :
-1. NE SUPPRIME et N'AJOUTE aucune information factuelle
-2. Conserve TOUS les [Source N] exactement comme ils sont
-3. Structure : Analyse → Risque → Recommandation → Action immédiate
-4. Supprime le ton explicatif, adopte un ton de note juridique
-5. Termine par les actions concrètes à mener
-
-RÉPONSE À REFORMULER :
-{answer}
-
-RÉPONSE REFORMULÉE :""",
-}
-
-# Intents qui ne bénéficient PAS du refinement
+# Intents qui ne bénéficient PAS du polishing
 # (listes = déjà structurées, comparaisons = déjà binaires, refus = court)
 SKIP_REFINEMENT_INTENTS = {"liste_exhaustive", "comparaison", "refus"}
 
 
 def make_expert_refinement_node(components: NodeComponents):
-    """Crée le nœud de reformulation experte post-génération.
+    """Crée le nœud de polishing structurel contraint post-génération.
     
-    Reformule la réponse brute du LLM en une réponse de niveau DPO senior :
+    Polit la réponse brute du LLM sans la restructurer :
     - Supprime le ton pédagogique ("le RGPD est un règlement qui...")
-    - Restructure pour la prise de décision
+    - Supprime les intros/conclusions génériques et les répétitions
+    - NE change PAS l'ordre des sections, les livrables, les refs normatives
     - Conserve 100% des faits et des citations [Source N]
     
     Position dans le graphe : generate → **expert_refinement** → validate
@@ -475,19 +439,15 @@ def make_expert_refinement_node(components: NodeComponents):
             logger.info(f"🎓 [Agent] Phase 3b : Expert Refinement — skip (aucune source dans la réponse)")
             return {}
         
-        logger.info(f"🎓 [Agent] Phase 3b : Expert Refinement (intent={intent_type})")
+        logger.info(f"🎓 [Agent] Phase 3b : Structural Polishing (intent={intent_type})")
         
-        # Sélectionner le prompt adapté à l'intent
-        prompt_template = EXPERT_REFINEMENT_PROMPTS.get(
-            intent_type, EXPERT_REFINEMENT_PROMPTS["factuel"]
-        )
-        prompt = prompt_template.format(answer=answer)
+        prompt = STRUCTURAL_POLISHING_PROMPT.format(answer=answer)
         
         try:
             refinement_start = time.time()
             refined = components.generator.llm_provider.chat(
                 messages=[
-                    {"role": "system", "content": "Tu reformules des réponses RGPD pour des DPO seniors. Tu ne changes JAMAIS le fond, seulement la forme et la structure."},
+                    {"role": "system", "content": "Tu polis des réponses RGPD pour des DPO seniors. Tu ne changes JAMAIS le fond NI la structure. Tu ne fais que supprimer le bruit rédactionnel."},
                     {"role": "user", "content": prompt},
                 ],
                 model=components.generator.model,
@@ -498,7 +458,7 @@ def make_expert_refinement_node(components: NodeComponents):
             
             # Vérifications de sécurité
             if not refined or len(refined) < 50:
-                logger.warning(f"   ⚠️ Refinement trop court ({len(refined)} chars), on garde l'original")
+                logger.warning(f"   ⚠️ Polishing trop court ({len(refined)} chars), on garde l'original")
                 return {}
             
             # Vérifier que les [Source N] sont conservées
@@ -507,7 +467,7 @@ def make_expert_refinement_node(components: NodeComponents):
             
             if lost_sources:
                 logger.warning(
-                    f"   ⚠️ Refinement a perdu {len(lost_sources)} source(s): {lost_sources}, on garde l'original"
+                    f"   ⚠️ Polishing a perdu {len(lost_sources)} source(s): {lost_sources}, on garde l'original"
                 )
                 return {}
             
@@ -516,19 +476,19 @@ def make_expert_refinement_node(components: NodeComponents):
             max_allowed = min(len(answer) * 1.8, len(answer) + 500)
             if len(refined) > max_allowed:
                 logger.warning(
-                    f"   ⚠️ Refinement trop long ({len(refined)} vs {len(answer)} chars, max={int(max_allowed)}), on garde l'original"
+                    f"   ⚠️ Polishing trop long ({len(refined)} vs {len(answer)} chars, max={int(max_allowed)}), on garde l'original"
                 )
                 return {}
             
             logger.info(
-                f"   ✅ Refinement: {len(answer)} → {len(refined)} chars "
+                f"   ✅ Polishing: {len(answer)} → {len(refined)} chars "
                 f"({refined_sources} sources conservées) en {refinement_time:.1f}s"
             )
             
             return {"answer": refined}
             
         except Exception as e:
-            logger.warning(f"   ⚠️ Erreur refinement: {e}, on garde l'original")
+            logger.warning(f"   ⚠️ Erreur polishing: {e}, on garde l'original")
             return {}
     
     return expert_refinement

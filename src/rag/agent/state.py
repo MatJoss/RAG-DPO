@@ -23,6 +23,7 @@ class RAGState(TypedDict, total=False):
     """
     # ── Input ──
     question: str
+    original_question: Optional[str]  # Question brute avant réécriture multi-turn
     where_filter: Optional[Dict]
     enterprise_tags: Optional[List[str]]
     conversation_history: Optional[List[Dict[str, str]]]

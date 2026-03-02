@@ -3,9 +3,12 @@ RAG Agent Graph — Définition du StateGraph LangGraph.
 
 Graphe d'états avec routage conditionnel et tools :
 
-    START → classify → enrich → retrieve → generate → validate ─→ check_completeness ─→ respond → END
-                                    ↑                                       │
-                                    └──── (retry: re-retrieve ciblé) ───────┘
+    START → rewrite → classify → enrich → retrieve → generate → validate ─→ check_completeness ─→ respond → END
+                                                ↑                                       │
+                                                └──── (retry: re-retrieve ciblé) ───────┘
+
+Le nœud rewrite résout les références multi-turn ("et pour eux ?",
+"les mêmes conditions ?") en reformulant la question en autonome.
 
 L'enrichissement (enrich) injecte des infos structurées (articles RGPD,
 délais) dans le state AVANT le retrieval — l'info est ensuite injectée
@@ -35,6 +38,7 @@ from .nodes import (
     make_generate_node,
     make_respond_node,
     make_retrieve_node,
+    make_rewrite_node,
     make_validate_node,
 )
 from .state import RAGState
@@ -50,14 +54,15 @@ def build_graph(components: NodeComponents) -> StateGraph:
     """Construit le graphe LangGraph à partir des composants.
     
     Architecture :
-        classify → enrich → retrieve → generate → validate → check_completeness → respond
-                                ↑           ↑                        │
-                                │           └── (grounding retry) ───┤
-                                └── (completeness re-retrieve) ──────┘
+        rewrite → classify → enrich → retrieve → generate → validate → check_completeness → respond
+                                           ↑           ↑                        │
+                                           │           └── (grounding retry) ───┤
+                                           └── (completeness re-retrieve) ──────┘
     """
     graph = StateGraph(RAGState)
     
     # ── Nœuds ──
+    graph.add_node("rewrite", make_rewrite_node(components))
     graph.add_node("classify", make_classify_node(components))
     graph.add_node("enrich", make_enrich_node(components))
     graph.add_node("retrieve", make_retrieve_node(components))
@@ -67,7 +72,8 @@ def build_graph(components: NodeComponents) -> StateGraph:
     graph.add_node("respond", make_respond_node(components))
     
     # ── Arêtes ──
-    graph.add_edge(START, "classify")
+    graph.add_edge(START, "rewrite")
+    graph.add_edge("rewrite", "classify")
     graph.add_edge("classify", "enrich")
     graph.add_edge("enrich", "retrieve")
     graph.add_edge("retrieve", "generate")
@@ -194,7 +200,7 @@ class RAGAgentPipeline:
             answer=answer,
             sources=sources,
             cited_sources=cited,
-            question=question,
+            question=final_state.get("original_question", question),
             model=final_state.get("model", ""),
             retrieval_time=final_state.get("retrieval_time", 0.0),
             generation_time=final_state.get("generation_time", 0.0),

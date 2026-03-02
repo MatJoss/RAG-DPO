@@ -70,6 +70,115 @@ class NodeComponents:
 # Node functions
 # ═══════════════════════════════════════════════════════════════
 
+# ═══════════════════════════════════════════════════════════════
+# Rewrite node (multi-turn)
+# ═══════════════════════════════════════════════════════════════
+
+REWRITE_PROMPT = """Réécris la QUESTION ACTUELLE en une question autonome et complète.
+
+Règles STRICTES :
+1. Résous les pronoms, "ça", "eux", "les mêmes", "et pour X ?" en utilisant l'HISTORIQUE
+2. La question réécrite doit être compréhensible SANS l'historique
+3. Conserve le français et le sens exact — ne change RIEN d'autre
+4. Ne RÉPONDS PAS à la question — tu la REFORMULES seulement
+5. N'invente AUCUNE information absente de l'historique
+6. Retourne UNIQUEMENT la question reformulée, sans explication ni guillemets
+7. Si la question est déjà autonome et claire, retourne-la EXACTEMENT telle quelle
+
+HISTORIQUE :
+{history}
+
+QUESTION ACTUELLE : {question}
+
+QUESTION REFORMULÉE :"""
+
+
+def make_rewrite_node(components: NodeComponents):
+    """Crée le nœud de réécriture multi-turn.
+    
+    Si l'historique de conversation est présent, reformule la question
+    en une question autonome (résolution d'anaphores, de pronoms, etc.).
+    Sinon, passe la question telle quelle.
+    
+    Position dans le graphe : START → **rewrite** → classify
+    """
+    
+    def rewrite(state: RAGState) -> Dict[str, Any]:
+        question = state["question"]
+        conversation_history = state.get("conversation_history")
+        
+        # Pas d'historique → pas de réécriture
+        if not conversation_history:
+            return {"original_question": question}
+        
+        # Filtrer : au moins un échange user+assistant
+        user_msgs = [m for m in conversation_history if m.get("role") == "user"]
+        if not user_msgs:
+            return {"original_question": question}
+        
+        logger.info(f"✏️  [Agent] Phase -1 : Query Rewrite (multi-turn, {len(conversation_history)} messages)")
+        
+        # Formater l'historique (5 derniers échanges max)
+        history_lines = []
+        for msg in conversation_history[-10:]:  # 5 échanges = 10 messages max
+            role = "Utilisateur" if msg["role"] == "user" else "Assistant"
+            # Tronquer les réponses longues pour ne pas exploser le prompt
+            content = msg["content"]
+            if role == "Assistant" and len(content) > 500:
+                content = content[:500] + "..."
+            history_lines.append(f"{role}: {content}")
+        
+        history_str = "\n".join(history_lines)
+        
+        # Appel LLM pour réécriture
+        prompt = REWRITE_PROMPT.format(history=history_str, question=question)
+        
+        try:
+            rewritten = components.generator.llm_provider.chat(
+                messages=[
+                    {"role": "system", "content": "Tu réécris des questions pour les rendre autonomes."},
+                    {"role": "user", "content": prompt},
+                ],
+                model=components.generator.model,
+                temperature=0.0,
+                max_tokens=200,
+            ).strip()
+            
+            # Nettoyage basique
+            # Enlever les guillemets encadrants si présents
+            if rewritten.startswith('"') and rewritten.endswith('"'):
+                rewritten = rewritten[1:-1]
+            if rewritten.startswith("'") and rewritten.endswith("'"):
+                rewritten = rewritten[1:-1]
+            
+            # Vérification : la réécriture ne doit pas être vide ou absurde
+            if not rewritten or len(rewritten) < 5:
+                logger.warning(f"   ⚠️ Réécriture trop courte, on garde l'originale")
+                return {"original_question": question}
+            
+            if rewritten.lower() == question.lower():
+                logger.info(f"   → Question déjà autonome, pas de changement")
+                return {"original_question": question}
+            
+            logger.info(f"   → Originale : {question}")
+            logger.info(f"   → Réécrite  : {rewritten}")
+            
+            return {
+                "original_question": question,
+                "question": rewritten,
+            }
+            
+        except Exception as e:
+            logger.warning(f"   ⚠️ Erreur réécriture: {e}, on garde l'originale")
+            return {"original_question": question}
+    
+    return rewrite
+
+
+# ═══════════════════════════════════════════════════════════════
+# Classify node
+# ═══════════════════════════════════════════════════════════════
+
 def make_classify_node(components: NodeComponents):
     """Crée le nœud de classification d'intention."""
     
@@ -332,10 +441,15 @@ def make_respond_node(components: NodeComponents):
         """Assemble les résultats finaux."""
         total_time = time.time() - state.get("start_time", time.time())
         
+        original = state.get("original_question")
+        question = state.get("question", "")
+        rewritten = original and original != question
+        
         logger.info(
             f"📝 [Agent] Réponse finale: "
             f"{len(state.get('answer', ''))} chars, "
             f"{total_time:.1f}s total"
+            f"{' (question réécrite)' if rewritten else ''}"
         )
         
         return {"total_time": total_time}

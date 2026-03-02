@@ -72,8 +72,10 @@ rag:
   enable_validation: true
   relevance_threshold: 0.80      # Calibré pour bge-reranker-v2-m3 (scores 0-1, pertinent ~0.2-0.8)
   
-  # Structural polishing (polishing DPO senior post-génération)
-  enable_expert_refinement: true   # Coût: +1 appel LLM (~5-15s), polit sans restructurer
+  # Structural polishing (post-génération, optionnel)
+  # Désactivé : le generate est déjà optimal, un 2e passage LLM dégrade la qualité
+  # (fusionne des étapes, perd de la granularité normative, contamination inter-sujets)
+  enable_expert_refinement: false
 
   # Génération
   temperature: 0.0              # Factuel strict

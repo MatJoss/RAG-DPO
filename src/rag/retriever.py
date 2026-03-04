@@ -577,24 +577,6 @@ class RAGRetriever:
         documents.sort(key=lambda d: d.avg_similarity, reverse=True)
         return documents[:n_documents]
     
-    def retrieve_chunks_only(
-        self,
-        query: str,
-        n_results: int = 5,
-        where_filter: Optional[Dict[str, Any]] = None
-    ) -> List[RetrievedChunk]:
-        """Version simple : top K chunks sans déduplication (debug)."""
-        query_embedding = self._embed([query])[0]
-        
-        results = self.collection.query(
-            query_embeddings=[query_embedding],
-            n_results=n_results,
-            where=where_filter,
-            include=["documents", "metadatas", "distances"]
-        )
-        
-        return self._parse_chromadb_results(results)
-    
     def format_results_debug(self, documents: List[RetrievedDocument]) -> str:
         """Format les résultats pour debug."""
         lines = [f"\n📊 {len(documents)} documents trouvés\n"]

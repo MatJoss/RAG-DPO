@@ -27,11 +27,11 @@
 - [x] `_split_long_text()` : renommé `sheet_name` → `context_name` (générique)
 - [x] Tests validés : HTML 1 table → 7 chunks, PDF 1 table → 1 chunk (texte naturel)
 
-### À faire 🔲
-- [ ] Rechunk complet (rebuild_pipeline.py) pour inclure tables HTML/PDF/DOCX
-- [ ] Exécuter `tag_all_chunks.py --force` sur les chunks (~2-3h) — refaire avec prompt guidé
-- [ ] Re-run benchmark (3 runs) pour mesurer impact
-- [ ] README update + git push
+### Terminé ✅ (v7 — mars 2026)
+- [x] Rechunk complet (`rebuild_pipeline.py --fresh`) — 16 919 chunks (18h)
+- [x] `tag_all_chunks.py --force` — 25 catégories guidées (2h)
+- [x] Benchmark 42q × 3 runs — **92.1% ± 0.3%** (+2.9 pts vs v6b)
+- [x] README rewrite (FR + EN) + git push
 
 ---
 

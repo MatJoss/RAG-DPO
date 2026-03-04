@@ -35,7 +35,6 @@ from .tools import (
     RGPD_ARTICLES,
     RGPD_DEADLINES,
     calculate_deadline,
-    list_deadlines,
     lookup_article,
     search_articles_by_topic,
 )

@@ -196,32 +196,3 @@ def expand_query_with_acronyms(query: str) -> str:
                     expanded = f"{clean_word} {definition} " + expanded[len(clean_word):].lstrip()
     
     return expanded
-
-
-def get_all_acronyms() -> dict:
-    """Retourne le dictionnaire complet des acronymes."""
-    return RGPD_ACRONYMS.copy()
-
-
-def add_acronym(acronym: str, definition: str) -> None:
-    """
-    Ajoute un nouvel acronyme au dictionnaire.
-    
-    Args:
-        acronym: L'acronyme (ex: "AIPD")
-        definition: Sa définition complète
-    """
-    RGPD_ACRONYMS[acronym] = definition
-
-
-def search_acronym(acronym: str) -> str | None:
-    """
-    Recherche la définition d'un acronyme.
-    
-    Args:
-        acronym: L'acronyme à rechercher
-        
-    Returns:
-        La définition si trouvée, None sinon
-    """
-    return RGPD_ACRONYMS.get(acronym.upper())

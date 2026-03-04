@@ -280,14 +280,14 @@ Tous convergent vers **`_convert_table_rows()`** — un pipeline commun :
 Chaque chunk est taggé parmi **25 catégories RGPD normalisées** :
 
 ```
-bases légales, consentement, intérêt légitime, droits des personnes,
-droit d'accès, droit à l'effacement, portabilité, opposition,
-données sensibles, données de santé, données biométriques,
-transferts hors UE, sous-traitance, analyse d'impact (AIPD/PIA),
-violation de données, sanctions et contentieux, vidéosurveillance,
-cookies et traceurs, prospection commerciale, ressources humaines,
-secteur public, mineurs et éducation, recherche et statistiques,
-intelligence artificielle, cybersécurité et mesures techniques
+droits des personnes, consentement, sécurité des données,
+durée de conservation, sous-traitance, base légale,
+données sensibles, transfert hors UE, cookies,
+violation de données, transparence, DPO,
+vidéosurveillance, finalité du traitement, registre des traitements,
+AIPD, anonymisation, minimisation, responsable de traitement,
+prospection commerciale, conformité RGPD, profilage,
+sanctions CNIL, données de santé, information des personnes
 ```
 
 Le prompt LLM guide le modèle vers ce vocabulaire contrôlé, éliminant les tags anarchiques (7 500 → ~25).
@@ -320,7 +320,7 @@ RAG-DPO/
 ├── pages/
 │   ├── 1_💬_Chat.py            # Chat RAG interactif + feedback + toggle Agent/Natif
 │   ├── 2_📊_Dashboard.py       # Dashboard observabilité (métriques, alertes)
-│   └── 3_📄_Documents.py       # Gestion documents entreprise
+│   └── 3_📂_Documents.py       # Gestion documents entreprise
 ├── test_rag.py                 # Test RAG en ligne de commande
 ├── check_install.py            # Vérification de l'installation
 ├── configs/
@@ -436,7 +436,7 @@ Ouvre l'application multipage dans le navigateur :
 | 🏠 **Accueil** | Vue d'ensemble du système, statistiques |
 | 💬 **Chat** | Interface Q&R RAG avec sources citées, feedback 👍/👎 et toggle Agent/Natif |
 | 📊 **Dashboard** | Métriques temps réel, alertes, feedback, export JSON |
-| 📄 **Documents** | Gestion des documents entreprise (import, liste, purge) |
+| 📂 **Documents** | Gestion des documents entreprise (import, liste, purge) |
 
 Fonctionnalités du chat :
 - **Toggle Agent / Natif** dans la sidebar (agent recommandé)
@@ -465,7 +465,7 @@ Exécute le benchmark 42 questions en 2 phases :
 1. **Phase 1** : Génération RAG + scoring par mots-clés + similarité sémantique (BGE-M3 cosine)
 2. **Phase 2** : LLM-as-Judge — score libre 0-100 en JSON, discrétisé côté code (100/90/75/50/25/0)
 
-Score final = **55% Correctness** (50% LLM-Judge + 35% Semantic + 15% Keywords) + **25% Faithfulness** + **20% Sources**
+Score final = **55% Correctness** (60% LLM-Judge + 40% Semantic) + **25% Faithfulness** + **20% Sources**
 
 ---
 

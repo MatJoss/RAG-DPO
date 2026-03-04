@@ -280,14 +280,14 @@ All converge to **`_convert_table_rows()`** — a common pipeline:
 Each chunk is tagged among **25 normalized GDPR categories**:
 
 ```
-legal bases, consent, legitimate interest, data subject rights,
-right of access, right to erasure, portability, objection,
-sensitive data, health data, biometric data,
-transfers outside EU, subprocessing, impact assessment (DPIA/PIA),
-data breach, sanctions and litigation, video surveillance,
-cookies and trackers, commercial prospecting, human resources,
-public sector, minors and education, research and statistics,
-artificial intelligence, cybersecurity and technical measures
+data subject rights, consent, data security,
+data retention period, subprocessing, legal basis,
+sensitive data, transfers outside EU, cookies,
+data breach, transparency, DPO,
+video surveillance, purpose of processing, processing records,
+DPIA, anonymization, minimization, data controller,
+commercial prospecting, GDPR compliance, profiling,
+CNIL sanctions, health data, informing data subjects
 ```
 
 The LLM prompt guides the model toward this controlled vocabulary, eliminating anarchic tags (7,500 → ~25).
@@ -320,7 +320,7 @@ RAG-DPO/
 ├── pages/
 │   ├── 1_💬_Chat.py            # Interactive RAG chat + feedback + Agent/Native toggle
 │   ├── 2_📊_Dashboard.py       # Observability dashboard (metrics, alerts)
-│   └── 3_📄_Documents.py       # Enterprise document management
+│   └── 3_📂_Documents.py       # Enterprise document management
 ├── test_rag.py                 # CLI RAG testing
 ├── check_install.py            # Installation verification
 ├── configs/
@@ -436,7 +436,7 @@ Opens the multipage application in the browser:
 | 🏠 **Home** | System overview, statistics |
 | 💬 **Chat** | RAG Q&A interface with cited sources, 👍/👎 feedback, Agent/Native toggle |
 | 📊 **Dashboard** | Real-time metrics, alerts, feedback, JSON export |
-| 📄 **Documents** | Enterprise document management (import, list, purge) |
+| 📂 **Documents** | Enterprise document management (import, list, purge) |
 
 Chat features:
 - **Agent / Native toggle** in sidebar (agent recommended)
@@ -465,7 +465,7 @@ Runs the 42-question benchmark in 2 phases:
 1. **Phase 1**: RAG generation + keyword scoring + semantic similarity (BGE-M3 cosine)
 2. **Phase 2**: LLM-as-Judge — free score 0-100 in JSON, code-side discretization (100/90/75/50/25/0)
 
-Final score = **55% Correctness** (50% LLM-Judge + 35% Semantic + 15% Keywords) + **25% Faithfulness** + **20% Sources**
+Final score = **55% Correctness** (60% LLM-Judge + 40% Semantic) + **25% Faithfulness** + **20% Sources**
 
 ---
 

@@ -254,3 +254,22 @@
   ```
 - **Anti-pattern** : ne JAMAIS utiliser `$env:PYTHONIOENCODING='utf-8'` dans le terminal — le script doit être auto-suffisant
 - **Inclut** : scripts dans `tasks/`, scripts temporaires create→run→delete, scripts d'analyse, rechunk, tout
+
+## Scripts temporaires : imports avec sys.path, JAMAIS $env:PYTHONPATH
+- **Erreur récurrente** : mettre `$env:PYTHONPATH = "e:\Projets\RAG-DPO"` dans la commande PowerShell pour que les `from src.xxx import` marchent
+- **Problème** : fragile, dépend du shell, oublié au prochain lancement, mélange logique Python et config shell
+- **Règle ABSOLUE** : le script DOIT gérer son propre path dans ses premières lignes :
+  ```python
+  import sys, os
+  sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+  ```
+- **Anti-pattern** : ne JAMAIS utiliser `$env:PYTHONPATH` dans le terminal — le script doit être auto-suffisant
+- **Pattern** : le script dans `tasks/` fait un `sys.path.insert(0, parent_du_dossier_tasks)` pour accéder à `src/`
+
+## Surapprentissage : JAMAIS les questions du dataset en exemples dans un prompt
+- **Erreur commise** : ajout de q14 et q36 du qa_dataset.json comme exemples dans le prompt du classifieur d'intent → surapprentissage pur
+- **Conséquence** : le classifieur "apprend les réponses" au lieu d'apprendre les règles → ne généralise pas
+- **Cascade de coûts** : fix v1 casse q14/q36 → investigation → fix v2 → 2 re-evals supplémentaires → re-analyse → tout ça pour corriger un problème auto-infligé
+- **Règle ABSOLUE** : les exemples dans un prompt doivent être des exemples GÉNÉRIQUES illustrant une RÈGLE, jamais des cas spécifiques du dataset de test
+- **Pattern** : si tu veux améliorer un classifieur qui se trompe sur une question, reformule la RÈGLE pour couvrir le cas, ne copie-colle PAS la question
+- **Test** : demande-toi "est-ce que cet exemple serait utile si la question était différente ?" — si non, c'est du surapprentissage

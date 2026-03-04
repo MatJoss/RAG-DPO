@@ -2,8 +2,8 @@
 
 **Système RAG (Retrieval-Augmented Generation) spécialisé en protection des données personnelles**, conçu pour assister les DPO dans leurs missions quotidiennes. Entièrement local, sans envoi de données à un tiers.
 
-> **Score benchmark : 89.7% ± 0.4%** sur 42 questions × 3 runs (scoring v7, sans discrétisation)
-> Une seule question sous 80% — scoring brut, scores non gonflés.
+> **Score benchmark : 89.3% ± 0.6%** sur 42 questions × 3 runs (scoring v7, sans discrétisation)
+> Zéro question sous 80% — scoring brut, scores non gonflés.
 
 ---
 
@@ -33,69 +33,69 @@
 
 | Métrique | Valeur |
 |---|---|
-| **Score global** | **89.7% ± 0.4%** |
-| Runs individuels | 89.8%, 90.0%, 89.1% |
-| Questions < 80% | **1** (q38, 80.0%) |
-| Questions instables (écart > 10%) | **3** (q10, q11, q38) |
-| Écart moyen par question | 0.029 |
+| **Score global** | **89.3% ± 0.6%** |
+| Runs individuels | 89.0%, 88.8%, 90.0% |
+| Questions < 80% | **0** |
+| Questions instables (écart > 10%) | **5** (q03, q10, q12, q15, q31) |
+| Écart moyen par question | 0.030 |
 | Écart max | 0.32 |
 
 ### Par catégorie
 
 | Catégorie | Questions | Score |
 |---|---|---|
-| **Définition** | 12 | **90.6%** |
-| **Obligation** | 10 | **90.5%** |
-| **Piège** | 4 | **90.4%** |
-| **Hors périmètre** | 4 | **88.2%** |
-| **Recommandation** | 12 | **88.4%** |
+| **Définition** | 12 | **91.5%** |
+| **Hors périmètre** | 4 | **91.3%** |
+| **Obligation** | 10 | **89.9%** |
+| **Piège** | 4 | **89.8%** |
+| **Recommandation** | 12 | **86.0%** |
 
 ### Scores par question
 
 | # | Question | Cat. | Score |
 |---|---|---|---|
-| q01 | Qu'est-ce qu'une donnée personnelle ? | Définition | **94.0%** |
-| q02 | Qui est responsable de traitement ? | Définition | **84.0%** |
-| q03 | RT vs sous-traitant ? | Définition | **82.7%** |
+| q01 | Qu'est-ce qu'une donnée personnelle ? | Définition | **92.7%** |
+| q02 | Qui est responsable de traitement ? | Définition | **95.0%** |
+| q03 | RT vs sous-traitant ? | Définition | **83.3%** |
 | q04 | Quand une AIPD est-elle obligatoire ? | Obligation | **91.0%** |
 | q05 | Critères WP29 déclenchant une AIPD ? | Recommandation | **93.0%** |
-| q06 | Liste AIPD CNIL ? | Recommandation | **96.0%** |
+| q06 | Liste AIPD CNIL ? | Recommandation | **93.3%** |
 | q07 | Obligations du responsable de traitement ? | Obligation | **91.0%** |
-| q08 | Droits des personnes et limites ? | Définition | **91.0%** |
-| q09 | Conserver des CV indéfiniment ? | Recommandation | **91.7%** |
-| q10 | Intérêt légitime pour la vidéosurveillance ? | Recommandation | **88.7%** |
-| q11 | Opposition à un traitement RH ? | Recommandation | **87.0%** |
-| q12 | Conservation de données 50 ans ? | Piège | **84.7%** |
-| q13 | DPO obligatoire partout ? | Obligation | **94.3%** |
-| q14 | Article 99 du RGPD sur l'IA ? | Piège | **95.0%** |
-| q15 | Quand faire une étude d'impact ? | Obligation | **90.3%** |
+| q08 | Droits des personnes et limites ? | Définition | **91.3%** |
+| q09 | Conserver des CV indéfiniment ? | Recommandation | **92.0%** |
+| q10 | Intérêt légitime pour la vidéosurveillance ? | Recommandation | **88.0%** |
+| q11 | Opposition à un traitement RH ? | Recommandation | **90.0%** |
+| q12 | Conservation de données 50 ans ? | Piège | **82.7%** |
+| q13 | DPO obligatoire partout ? | Obligation | **92.7%** |
+| q14 | Article 99 du RGPD sur l'IA ? | Piège | **97.0%** |
+| q15 | Quand faire une étude d'impact ? | Obligation | **86.7%** |
 | q16 | Qui décide des moyens du traitement ? | Définition | **93.0%** |
-| q17 | Meilleure base marketing 2024 ? | Hors périmètre | **89.7%** |
-| q18 | Contourner une obligation CNIL ? | Hors périmètre | **93.3%** |
+| q17 | Meilleure base marketing 2024 ? | Hors périmètre | **90.0%** |
+| q18 | Contourner une obligation CNIL ? | Hors périmètre | **94.0%** |
 | q19 | Conditions de validité du consentement ? | Définition | **91.7%** |
 | q20 | Fondement contractuel d'un traitement ? | Définition | **95.0%** |
-| q21 | Délai notification violation CNIL ? | Obligation | **91.0%** |
-| q22 | Informer les personnes d'une violation ? | Obligation | **90.7%** |
-| q23 | Registre des traitements obligatoire ? | Obligation | **89.0%** |
+| q21 | Délai notification violation CNIL ? | Obligation | **91.7%** |
+| q22 | Informer les personnes d'une violation ? | Obligation | **87.0%** |
+| q23 | Registre des traitements obligatoire ? | Obligation | **90.3%** |
 | q24 | Qu'est-ce que la pseudonymisation ? | Définition | **93.0%** |
-| q25 | Donnée anonymisée = donnée personnelle ? | Définition | **95.0%** |
-| q26 | Conditions transfert hors UE ? | Obligation | **91.3%** |
+| q25 | Donnée anonymisée = donnée personnelle ? | Définition | **95.7%** |
+| q26 | Conditions transfert hors UE ? | Obligation | **91.0%** |
 | q27 | Sanctions possibles de la CNIL ? | Définition | **84.7%** |
-| q28 | Catégories particulières de données ? | Définition | **92.3%** |
-| q29 | Qu'est-ce que le profilage ? | Définition | **90.3%** |
-| q30 | Décision entièrement automatisée ? | Obligation | **86.0%** |
-| q31 | Durée conservation bulletins de paie ? | Recommandation | **87.0%** |
-| q32 | Consentement pour tous les cookies ? | Recommandation | **91.0%** |
+| q28 | Catégories particulières de données ? | Définition | **93.0%** |
+| q29 | Qu'est-ce que le profilage ? | Définition | **89.3%** |
+| q30 | Décision entièrement automatisée ? | Obligation | **87.3%** |
+| q31 | Durée conservation bulletins de paie ? | Recommandation | **65.0%** |
+| q32 | Consentement pour tous les cookies ? | Recommandation | **90.7%** |
 | q33 | Prospection commerciale d'un client ? | Recommandation | **86.0%** |
-| q34 | Sous-traitant cloud hors UE ? | Recommandation | **87.0%** |
-| q35 | RGPD interdit données sensibles ? | Piège | **91.7%** |
-| q36 | Refuser une demande d'accès ? | Piège | **90.3%** |
-| q37 | Antivirus recommandé par la CNIL ? | Hors périmètre | **89.7%** |
-| q38 | Comment pirater un site web ? | Hors périmètre | **80.0%** |
+| q34 | Sous-traitant cloud hors UE ? | Recommandation | **86.0%** |
+| q35 | RGPD interdit données sensibles ? | Piège | **90.3%** |
+| q36 | Refuser une demande d'accès ? | Piège | **89.3%** |
+| q37 | Antivirus recommandé par la CNIL ? | Hors périmètre | **89.3%** |
+| q38 | Comment pirater un site web ? | Hors périmètre | **92.0%** |
 | q39 | Durée conservation données clients ? | Recommandation | **88.0%** |
-| q40 | Transférer données sensibles cloud hors UE ? | Recommandation | **85.3%** |
-| q41 | Cookies de tracking sans consentement ? | Recommandation | **81.7%** |
-| q42 | Âge minimum consentement enfant en ligne ? | Recommandation | **87.3%** |
+| q40 | Transférer données sensibles cloud hors UE ? | Recommandation | **85.0%** |
+| q41 | Cookies de tracking sans consentement ? | Recommandation | **74.0%** |
+| q42 | Âge minimum consentement enfant en ligne ? | Recommandation | **87.0%** |
 
 ---
 
@@ -111,11 +111,11 @@ Le passage de la version v6b à v7 (mars 2026) a introduit deux changements maje
 
 | Métrique | Avant (v6b, scoring discrétisé) | Après (v7+v8, scoring brut) | Δ |
 |---|---|---|---|
-| **Score global** | 89.2% ± 1.1%¹ | **89.7% ± 0.4%** | **+0.5 pts** (réel ~+2.9 pts) |
-| Score pondéré | 89.6%¹ | 89.6% | = |
-| Questions < 80% | 4 | **1** | -3 |
-| Questions instables (écart > 10%) | 6 | **3** | -3 |
-| Écart moyen par question | 0.049 | **0.029** | ÷1.7 |
+| **Score global** | 89.2% ± 1.1%¹ | **89.3% ± 0.6%** | **+0.1 pts** (réel ~+2.5 pts) |
+| Score pondéré | 89.6%¹ | 87.1% | -2.5¹ |
+| Questions < 80% | 4 | **0** | -4 |
+| Questions instables (écart > 10%) | 6 | **5** | -1 |
+| Écart moyen par question | 0.049 | **0.030** | ÷1.6 |
 | Écart max | 0.47 | **0.32** | ÷1.5 |
 | Chunks dans ChromaDB | ~14 400 | **16 919** | +2 519 |
 
@@ -125,23 +125,23 @@ Le passage de la version v6b à v7 (mars 2026) a introduit deux changements maje
 
 | Catégorie | Avant¹ | Après (brut) | Δ |
 |---|---|---|---|
-| Définition | 93.3% | **90.6%** | -2.7¹ |
-| Obligation | 92.0% | **90.5%** | -1.5¹ |
-| Recommandation | 83.1% | **88.4%** | **+5.3** |
-| Piège | 91.2% | **90.4%** | -0.8¹ |
-| Hors périmètre | 88.3% | **88.2%** | -0.1¹ |
+| Définition | 93.3% | **91.5%** | -1.8¹ |
+| Obligation | 92.0% | **89.9%** | -2.1¹ |
+| Recommandation | 83.1% | **86.0%** | **+2.9** |
+| Piège | 91.2% | **89.8%** | -1.4¹ |
+| Hors périmètre | 88.3% | **91.3%** | **+3.0** |
 
 ¹ *Les baisses apparentes s'expliquent par le passage au scoring brut (non discrétisé). La catégorie « recommandation » progresse réellement grâce aux tableaux.*
 
-> **La catégorie « recommandation » (+5.3 pts)** est celle qui bénéficie le plus du nouveau chunking. Les tableaux CNIL contenant les durées de conservation, les règles de prospection et les recommandations cookies étaient précisément dans les `<table>` HTML ignorées par l'ancien chunker.
+> **La catégorie « recommandation » (+2.9 pts)** est celle qui bénéficie le plus du nouveau chunking, aux côtés de « hors périmètre » (+3.0 pts, grâce au refus déterministe). Les tableaux CNIL contenant les durées de conservation, les règles de prospection et les recommandations cookies étaient précisément dans les `<table>` HTML ignorées par l'ancien chunker.
 
 ### Top 3 des améliorations
 
 | Question | Avant¹ | Après (brut) | Gain |
 |---|---|---|---|
 | q33 — Prospection commerciale | 48% | **86.0%** | **+38 pts** |
-| q40 — Données sensibles cloud hors UE | 58% | **85.3%** | **+27.3 pts** |
-| q31 — Durée conservation paie | 65.7% | **87.0%** | **+21.3 pts** |
+| q40 — Données sensibles cloud hors UE | 58% | **85.0%** | **+27.0 pts** |
+| q11 — Opposition traitement RH | 70% | **90.0%** | **+20.0 pts** |
 
 Ces trois questions portaient sur des informations contenues dans des **tableaux HTML** de la CNIL. L'ancien chunker (`<h2>, <h3>, <p>, <ul>` uniquement) ignorait complètement les éléments `<table>`, ce qui rendait ces données invisibles au retriever.
 

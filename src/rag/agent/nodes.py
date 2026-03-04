@@ -199,6 +199,96 @@ def make_classify_node(components: NodeComponents):
     return classify
 
 
+# ── Réponses de refus déterministes (pas de LLM → 100% stable) ──
+
+_REFUSAL_ILLEGAL = (
+    "Je refuse de répondre à cette question. Cette demande est **directement illégale** "
+    "et **hors périmètre RGPD/CNIL** couvert par mes sources.\n\n"
+    "Pour rappel, ce type d'action expose à des **sanctions pénales** :\n"
+    "- **Accès frauduleux à un système informatique** (art. 323-1 Code pénal) : "
+    "jusqu'à 3 ans d'emprisonnement et 100 000 € d'amende\n"
+    "- **Collecte frauduleuse de données personnelles** (art. 226-18 Code pénal) : "
+    "jusqu'à 5 ans d'emprisonnement et 300 000 € d'amende\n"
+    "- **Détournement de finalité** (art. 226-21 Code pénal) : "
+    "jusqu'à 5 ans d'emprisonnement et 300 000 € d'amende\n\n"
+    "Ces infractions sont poursuivies d'office et ne relèvent en aucun cas "
+    "de l'accompagnement d'un DPO."
+)
+
+_REFUSAL_CONTOURNEMENT = (
+    "Je refuse de répondre à cette question. Chercher à **contourner, éviter ou esquiver** "
+    "une obligation légale est contraire au RGPD.\n\n"
+    "Les obligations RGPD sont des **obligations légales impératives**. "
+    "Leur non-respect expose à des **sanctions administratives** pouvant atteindre :\n"
+    "- **20 millions d'euros** ou **4 % du chiffre d'affaires annuel mondial** "
+    "(art. 83 RGPD), le montant le plus élevé étant retenu.\n\n"
+    "En tant qu'assistant RGPD, je ne propose aucune alternative ni astuce "
+    "pour contourner ces obligations."
+)
+
+_REFUSAL_HORS_PERIMETRE = (
+    "Cette question ne relève pas du périmètre RGPD/CNIL couvert par mes sources. "
+    "Je suis un assistant spécialisé en **protection des données personnelles** "
+    "et ne peux répondre qu'aux questions relevant de ce domaine."
+)
+
+# Mots-clés pour distinguer les sous-types de refus
+_ILLEGAL_KEYWORDS = {
+    "pirater", "hacker", "cracker", "piratage", "hacking",
+    "voler des données", "vol de données", "espionner",
+    "usurper", "usurpation", "accès frauduleux",
+    "ddos", "phishing", "ransomware", "malware",
+}
+
+_CONTOURNEMENT_KEYWORDS = {
+    "contourner", "éviter", "esquiver", "échapper",
+    "ne pas respecter", "ignorer l'obligation",
+    "sans se faire prendre", "sans être sanctionné",
+}
+
+
+def _classify_refusal_type(question: str) -> str:
+    """Détermine le sous-type de refus à partir de la question."""
+    q_lower = question.lower()
+    for kw in _ILLEGAL_KEYWORDS:
+        if kw in q_lower:
+            return "illegal"
+    for kw in _CONTOURNEMENT_KEYWORDS:
+        if kw in q_lower:
+            return "contournement"
+    return "hors_perimetre"
+
+
+def make_refusal_node(components: NodeComponents):
+    """Crée le nœud de refus déterministe (court-circuit, pas de LLM)."""
+
+    def refusal(state: RAGState) -> Dict[str, Any]:
+        question = state["question"]
+        refusal_type = _classify_refusal_type(question)
+
+        if refusal_type == "illegal":
+            answer = _REFUSAL_ILLEGAL
+        elif refusal_type == "contournement":
+            answer = _REFUSAL_CONTOURNEMENT
+        else:
+            answer = _REFUSAL_HORS_PERIMETRE
+
+        logger.info(
+            f"🚫 [Agent] Refus déterministe ({refusal_type}) — "
+            f"court-circuit retrieve/generate"
+        )
+
+        return {
+            "answer": answer,
+            "documents": [],
+            "retrieval_time": 0.0,
+            "generation_time": 0.0,
+            "model": "deterministic_refusal",
+        }
+
+    return refusal
+
+
 def make_retrieve_node(components: NodeComponents):
     """Crée le nœud de retrieval (hybrid search + optional reranking)."""
     

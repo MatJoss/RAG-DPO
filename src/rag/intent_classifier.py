@@ -46,7 +46,7 @@ Choisis l'intent parmi :
 - "organisationnel" : question complexe sur la gouvernance, la structure organisationnelle, les processus internes multi-acteurs
 
 RÈGLES DE CLASSIFICATION (STRICTES) :
-1. REFUS D'ABORD : si la question cherche à contourner, éviter, esquiver une obligation, ou si elle n'a AUCUN rapport avec le RGPD/CNIL → "refus"
+1. REFUS = uniquement ces 2 cas : (a) la question n'a AUCUN rapport avec la protection des données/RGPD/CNIL, OU (b) elle demande explicitement une action illégale ou un contournement de la loi. Si la question MENTIONNE le RGPD, un article, un droit, la CNIL → ce n'est PAS un refus.
 2. FACTUEL PAR DÉFAUT : en cas de doute, choisis "factuel". C'est le choix le plus sûr.
 3. "Qui est X ?" / "Quel est le rôle de X ?" / "Qui décide X ?" → FACTUEL (pas organisationnel)
 4. "Quelle est la différence entre X et Y ?" → comparaison SEULEMENT si 2 concepts distincts sont explicitement comparés
@@ -62,8 +62,14 @@ Exemples :
 - "Comment mener une AIPD ?" → methodologique
 - "Comment contourner une obligation CNIL ?" → refus
 - "Quel est le meilleur logiciel CRM ?" → refus (pas un sujet RGPD)
+- "Comment pirater un site web ?" → refus (activité illégale)
 - "Peut-on contacter un client pour de la prospection commerciale ?" → factuel (la CNIL encadre la prospection)
 - "Quels sont les droits des personnes concernées ?" → liste_exhaustive
+
+ATTENTION — pièges fréquents, NE PAS classer "refus" :
+- Une question qui MENTIONNE le RGPD, un article, la CNIL ou la protection des données → JAMAIS "refus", même si l'article n'existe pas ou si le sujet est connexe (IA, blockchain...)
+- Une question qui utilise le mot "refuser" dans le contexte d'un droit (droit d'accès, droit d'opposition...) → c'est "factuel", pas "refus"
+- "refus" = la question n'a AUCUN lien avec la protection des données OU demande EXPLICITEMENT une action illégale/un contournement de la loi
 
 Réponds avec ce JSON exact :
 {{

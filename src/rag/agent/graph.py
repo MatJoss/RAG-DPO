@@ -32,11 +32,13 @@ from ..retriever import RAGRetriever, create_retriever
 from ..validators import GroundingValidator
 from .nodes import (
     NodeComponents,
+    _classify_refusal_type,
     make_check_completeness_node,
     make_classify_node,
     make_enrich_node,
     make_expert_refinement_node,
     make_generate_node,
+    make_refusal_node,
     make_respond_node,
     make_retrieve_node,
     make_rewrite_node,
@@ -55,10 +57,11 @@ def build_graph(components: NodeComponents, config: Optional[Dict] = None) -> St
     """Construit le graphe LangGraph à partir des composants.
     
     Architecture (expert_refinement optionnel via config) :
-        rewrite → classify → enrich → retrieve → generate → [expert_refinement] → validate → check_completeness → respond
-                                           ↑                          ↑                                  │
-                                           │                          └── (grounding retry) ─────────────┤
-                                           └── (completeness re-retrieve) ───────────────────────────────┘
+        rewrite → classify ─┬─ intent=refus → refusal → respond
+                             └─ else → enrich → retrieve → generate → [expert_refinement] → validate → check_completeness → respond
+                                                   ↑                          ↑                                  │
+                                                   │                          └── (grounding retry) ─────────────┤
+                                                   └── (completeness re-retrieve) ───────────────────────────────┘
     """
     graph = StateGraph(RAGState)
     
@@ -71,6 +74,7 @@ def build_graph(components: NodeComponents, config: Optional[Dict] = None) -> St
     graph.add_node("validate", make_validate_node(components))
     graph.add_node("check_completeness", make_check_completeness_node(components))
     graph.add_node("respond", make_respond_node(components))
+    graph.add_node("refusal", make_refusal_node(components))
     
     # ── Expert refinement (optionnel, config.yaml: rag.enable_expert_refinement) ──
     _cfg = config or {}
@@ -81,7 +85,32 @@ def build_graph(components: NodeComponents, config: Optional[Dict] = None) -> St
     # ── Arêtes ──
     graph.add_edge(START, "rewrite")
     graph.add_edge("rewrite", "classify")
-    graph.add_edge("classify", "enrich")
+    
+    # Routage conditionnel après classification : refus → court-circuit
+    # UNIQUEMENT si les keywords explicites confirment (illegal/contournement).
+    # Si le classifieur dit "refus" mais que les keywords ne matchent rien,
+    # c'est probablement un faux positif → pipeline normal.
+    def route_after_classify(state: RAGState) -> str:
+        """Si intent=refus ET keywords confirmés, court-circuite vers refus déterministe."""
+        intent = state.get("intent")
+        if intent and intent.intent == "refus":
+            refusal_type = _classify_refusal_type(state["question"])
+            if refusal_type != "hors_perimetre":
+                # Keywords explicites détectés → refus sûr
+                return "refusal"
+            # Pas de keywords → faux positif probable, pipeline normal
+            logger.info(
+                "⚠️ [Agent] Classifieur dit 'refus' mais aucun keyword confirmé "
+                "→ pipeline normal"
+            )
+        return "enrich"
+    
+    graph.add_conditional_edges(
+        "classify",
+        route_after_classify,
+        {"refusal": "refusal", "enrich": "enrich"},
+    )
+    graph.add_edge("refusal", "respond")
     graph.add_edge("enrich", "retrieve")
     graph.add_edge("retrieve", "generate")
     

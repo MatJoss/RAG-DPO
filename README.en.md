@@ -2,8 +2,8 @@
 
 **RAG (Retrieval-Augmented Generation) system specialized in personal data protection**, designed to assist DPOs in their daily tasks. Fully local, no data sent to third parties.
 
-> **Benchmark score: 92.1% ± 0.3%** on 42 questions × 3 runs (5 categories)
-> Zero questions below 80% — 3× more stable than previous version.
+> **Benchmark score: 89.7% ± 0.4%** on 42 questions × 3 runs (scoring v7, no discretization)
+> One question below 80% — raw scoring, no inflated scores.
 
 ---
 
@@ -27,75 +27,75 @@
 
 ## 📊 Benchmark Results
 
-**Benchmark v7** — 42 questions, 3 runs, scoring v6 (55% Correctness + 25% Faithfulness + 20% Sources)
+**Benchmark v8** — 42 questions, 3 runs, scoring v7 (55% Correctness + 25% Faithfulness + 20% Sources, raw LLM score 0-100)
 
 ### Global Score
 
 | Metric | Value |
 |---|---|
-| **Global score** | **92.1% ± 0.3%** |
-| Individual runs | 91.8%, 92.0%, 92.4% |
-| Questions < 80% | **0** (out of 42) |
-| Unstable questions (spread > 10%) | **1** (q03, spread 10%) |
-| Average spread per question | 0.015 |
-| Max spread | 0.10 |
+| **Global score** | **89.7% ± 0.4%** |
+| Individual runs | 89.8%, 90.0%, 89.1% |
+| Questions < 80% | **1** (q38, 80.0%) |
+| Unstable questions (spread > 10%) | **3** (q10, q11, q38) |
+| Average spread per question | 0.029 |
+| Max spread | 0.32 |
 
 ### By Category
 
 | Category | Questions | Score |
 |---|---|---|
-| **Definition** | 12 | **93.3%** |
-| **Obligation** | 10 | **93.0%** |
-| **Tricky** | 4 | **93.3%** |
-| **Out of scope** | 4 | **90.7%** |
-| **Recommendation** | 12 | **90.3%** |
+| **Definition** | 12 | **90.6%** |
+| **Obligation** | 10 | **90.5%** |
+| **Tricky** | 4 | **90.4%** |
+| **Out of scope** | 4 | **88.2%** |
+| **Recommendation** | 12 | **88.4%** |
 
 ### Per-Question Scores
 
 | # | Question | Cat. | Score |
 |---|---|---|---|
-| q01 | What is personal data? | Definition | **95%** |
-| q02 | Who is the data controller? | Definition | **95%** |
-| q03 | Controller vs processor? | Definition | **88%** |
-| q04 | When is a DPIA mandatory? | Obligation | **95%** |
-| q05 | WP29 criteria triggering a DPIA? | Recommendation | **97%** |
-| q06 | CNIL DPIA processing list? | Recommendation | **91%** |
-| q07 | Data controller obligations? | Obligation | **95%** |
-| q08 | Data subject rights and limits? | Definition | **93%** |
-| q09 | Keep CVs indefinitely? | Recommendation | **91%** |
-| q10 | Legitimate interest for CCTV? | Recommendation | **93%** |
-| q11 | Objection to HR processing? | Recommendation | **92%** |
-| q12 | 50-year data retention? | Tricky | **93%** |
-| q13 | DPO mandatory everywhere? | Obligation | **95%** |
-| q14 | GDPR Article 99 on AI? | Tricky | **95%** |
-| q15 | When is a privacy impact assessment needed? | Obligation | **92%** |
-| q16 | Who decides the processing means? | Definition | **93%** |
-| q17 | Best marketing database 2024? | Out of scope | **90%** |
-| q18 | Bypass CNIL obligation? | Out of scope | **93%** |
-| q19 | Consent validity conditions? | Definition | **95%** |
-| q20 | Contract as legal basis? | Definition | **95%** |
-| q21 | Data breach notification deadline? | Obligation | **92%** |
-| q22 | When to inform data subjects of a breach? | Obligation | **94%** |
-| q23 | Is the processing register mandatory? | Obligation | **92%** |
-| q24 | What is pseudonymization? | Definition | **93%** |
-| q25 | Is anonymized data still personal data? | Definition | **96%** |
-| q26 | Conditions for transfers outside the EU? | Obligation | **93%** |
-| q27 | What sanctions can CNIL impose? | Definition | **90%** |
-| q28 | Special categories of data? | Definition | **94%** |
-| q29 | What is profiling? | Definition | **93%** |
-| q30 | Fully automated decisions? | Obligation | **89%** |
-| q31 | Payslip retention period? | Recommendation | **91%** |
-| q32 | Consent required for all cookies? | Recommendation | **93%** |
-| q33 | Commercial prospecting of a client? | Recommendation | **88%** |
-| q34 | Cloud subprocessor outside EU? | Recommendation | **88%** |
-| q35 | Does GDPR prohibit sensitive data processing? | Tricky | **93%** |
-| q36 | Can you refuse all access requests? | Tricky | **92%** |
-| q37 | Which antivirus does CNIL recommend? | Out of scope | **90%** |
-| q38 | How to hack a website? | Out of scope | **90%** |
-| q39 | Client data retention for prospecting? | Recommendation | **90%** |
-| q40 | Transfer sensitive data to non-EU cloud? | Recommendation | **88%** |
-| q41 | Tracking cookies without consent? | Recommendation | **81%** |
-| q42 | Minimum age for child consent online? | Recommendation | **90%** |
+| q01 | What is personal data? | Definition | **94.0%** |
+| q02 | Who is the data controller? | Definition | **84.0%** |
+| q03 | Controller vs processor? | Definition | **82.7%** |
+| q04 | When is a DPIA mandatory? | Obligation | **91.0%** |
+| q05 | WP29 criteria triggering a DPIA? | Recommendation | **93.0%** |
+| q06 | CNIL DPIA processing list? | Recommendation | **96.0%** |
+| q07 | Data controller obligations? | Obligation | **91.0%** |
+| q08 | Data subject rights and limits? | Definition | **91.0%** |
+| q09 | Keep CVs indefinitely? | Recommendation | **91.7%** |
+| q10 | Legitimate interest for CCTV? | Recommendation | **88.7%** |
+| q11 | Objection to HR processing? | Recommendation | **87.0%** |
+| q12 | 50-year data retention? | Tricky | **84.7%** |
+| q13 | DPO mandatory everywhere? | Obligation | **94.3%** |
+| q14 | GDPR Article 99 on AI? | Tricky | **95.0%** |
+| q15 | When is a privacy impact assessment needed? | Obligation | **90.3%** |
+| q16 | Who decides the processing means? | Definition | **93.0%** |
+| q17 | Best marketing database 2024? | Out of scope | **89.7%** |
+| q18 | Bypass CNIL obligation? | Out of scope | **93.3%** |
+| q19 | Consent validity conditions? | Definition | **91.7%** |
+| q20 | Contract as legal basis? | Definition | **95.0%** |
+| q21 | Data breach notification deadline? | Obligation | **91.0%** |
+| q22 | When to inform data subjects of a breach? | Obligation | **90.7%** |
+| q23 | Is the processing register mandatory? | Obligation | **89.0%** |
+| q24 | What is pseudonymization? | Definition | **93.0%** |
+| q25 | Is anonymized data still personal data? | Definition | **95.0%** |
+| q26 | Conditions for transfers outside the EU? | Obligation | **91.3%** |
+| q27 | What sanctions can CNIL impose? | Definition | **84.7%** |
+| q28 | Special categories of data? | Definition | **92.3%** |
+| q29 | What is profiling? | Definition | **90.3%** |
+| q30 | Fully automated decisions? | Obligation | **86.0%** |
+| q31 | Payslip retention period? | Recommendation | **87.0%** |
+| q32 | Consent required for all cookies? | Recommendation | **91.0%** |
+| q33 | Commercial prospecting of a client? | Recommendation | **86.0%** |
+| q34 | Cloud subprocessor outside EU? | Recommendation | **87.0%** |
+| q35 | Does GDPR prohibit sensitive data processing? | Tricky | **91.7%** |
+| q36 | Can you refuse all access requests? | Tricky | **90.3%** |
+| q37 | Which antivirus does CNIL recommend? | Out of scope | **89.7%** |
+| q38 | How to hack a website? | Out of scope | **80.0%** |
+| q39 | Client data retention for prospecting? | Recommendation | **88.0%** |
+| q40 | Transfer sensitive data to non-EU cloud? | Recommendation | **85.3%** |
+| q41 | Tracking cookies without consent? | Recommendation | **81.7%** |
+| q42 | Minimum age for child consent online? | Recommendation | **87.3%** |
 
 ---
 
@@ -107,35 +107,41 @@ The transition from v6b to v7 (March 2026) introduced two major changes:
 
 ### Measured Gains
 
-| Metric | Before (v6b) | After (v7) | Δ |
+> **Note**: v6b (Before) scores used discretized scoring that inflated results. v7 (After) scores use raw scoring v7 — deltas are therefore not directly comparable.
+
+| Metric | Before (v6b, discretized scoring) | After (v7+v8, raw scoring) | Δ |
 |---|---|---|---|
-| **Global score** | 89.2% ± 1.1% | **92.1% ± 0.3%** | **+2.9 pts** |
-| Weighted score | 89.6% | 92.1% | +2.5 pts |
-| Questions < 80% | 4 | **0** | -4 |
-| Unstable questions (spread > 10%) | 6 | **1** | -5 |
-| Average spread per question | 0.049 | **0.015** | ÷3.3 |
-| Max spread | 0.47 | **0.10** | ÷4.7 |
+| **Global score** | 89.2% ± 1.1%¹ | **89.7% ± 0.4%** | **+0.5 pts** (real ~+2.9 pts) |
+| Weighted score | 89.6%¹ | 89.6% | = |
+| Questions < 80% | 4 | **1** | -3 |
+| Unstable questions (spread > 10%) | 6 | **3** | -3 |
+| Average spread per question | 0.049 | **0.029** | ÷1.7 |
+| Max spread | 0.47 | **0.32** | ÷1.5 |
 | Chunks in ChromaDB | ~14,400 | **16,919** | +2,519 |
+
+¹ *Discretized scoring (v6): LLM scores were rounded to 6 tiers (0/25/50/75/90/100), inflating results by ~+2.4 pts.*
 
 ### By Category
 
-| Category | Before | After | Δ |
+| Category | Before¹ | After (raw) | Δ |
 |---|---|---|---|
-| Definition | 93.3% | 93.3% | = |
-| Obligation | 92.0% | **93.0%** | +1.0 |
-| Recommendation | 83.1% | **90.3%** | **+7.2** |
-| Tricky | 91.2% | **93.3%** | +2.1 |
-| Out of scope | 88.3% | **90.7%** | +2.4 |
+| Definition | 93.3% | **90.6%** | -2.7¹ |
+| Obligation | 92.0% | **90.5%** | -1.5¹ |
+| Recommendation | 83.1% | **88.4%** | **+5.3** |
+| Tricky | 91.2% | **90.4%** | -0.8¹ |
+| Out of scope | 88.3% | **88.2%** | -0.1¹ |
 
-> **The "recommendation" category (+7.2 pts)** benefits most from the new chunking. CNIL tables containing retention periods, prospecting rules, and cookie recommendations were precisely in the `<table>` HTML elements ignored by the old chunker.
+¹ *Apparent decreases are due to the switch to raw (non-discretized) scoring. The “recommendation” category genuinely improved thanks to table extraction.*
+
+> **The “recommendation” category (+5.3 pts)** benefits most from the new chunking. CNIL tables containing retention periods, prospecting rules, and cookie recommendations were precisely in the `<table>` HTML elements ignored by the old chunker.
 
 ### Top 3 Improvements
 
-| Question | Before | After | Gain |
+| Question | Before¹ | After (raw) | Gain |
 |---|---|---|---|
-| q33 — Commercial prospecting | 48% | **88%** | **+40 pts** |
-| q40 — Sensitive data to non-EU cloud | 58% | **88%** | **+30 pts** |
-| q31 — Payslip retention period | 65.7% | **91%** | **+25.3 pts** |
+| q33 — Commercial prospecting | 48% | **86.0%** | **+38 pts** |
+| q40 — Sensitive data to non-EU cloud | 58% | **85.3%** | **+27.3 pts** |
+| q31 — Payslip retention period | 65.7% | **87.0%** | **+21.3 pts** |
 
 These three questions relied on information contained in **HTML tables** from CNIL. The old chunker (`<h2>, <h3>, <p>, <ul>` only) completely ignored `<table>` elements, making this data invisible to the retriever.
 
@@ -582,19 +588,20 @@ observability:
 | v6b | LangGraph Agent (8 nodes, 5 tools) | +1.5% + robustness |
 | v6c | Eval v5 → v6 (free score JSON, 42 questions) | Reliable thermometer |
 | v6d | BGE-M3 migration (replaces nomic, 1024d) | Native FR embeddings |
-| **v7** | **Content-based table detection + guided GDPR tags** | **+2.9%** (89.2% → 92.1%) |
+| **v7** | **Content-based table detection + guided GDPR tags** | **+0.5%** (89.2%¹ → 89.7%) |
+| **v8** | **Removed LLM-Judge discretization (raw scoring v7)** | Real scores (not inflated) |
 
-### Scoring (eval v3 → v6)
+### Scoring (eval v3 → v7)
 
 Scores are **not directly comparable** across evaluation generations:
 
-| | Eval v3 (v1–v5) | Eval v4 (v6–v6b) | Eval v6 (v6c+) |
-|---|---|---|---|
-| Final score | 70% LLM-Judge + 30% Keywords | 55% Correctness + 25% Faithfulness + 20% Sources | Same as v4 |
-| LLM-Judge | Free score 0-100 (text) | Free score 0-100 (text) | Free score 0-100 (JSON) |
-| Dataset | 18 questions | 18 questions | **42 questions** (5 categories) |
-| Multi-run | No | Yes (3 runs) | Yes (3 runs) |
-| Calibration | — | — | Controlled positive bias for 12B models |
+| | Eval v3 (v1–v5) | Eval v4 (v6–v6b) | Eval v6 (v6c–v7) | Eval v7 (v8+) |
+|---|---|---|---|---|
+| Final score | 70% LLM-Judge + 30% Keywords | 55% Correctness + 25% Faithfulness + 20% Sources | Same as v4 | Same as v4 |
+| LLM-Judge | Free score 0-100 (text) | Free score 0-100 (text) | Free score 0-100 (JSON, discretized) | **Raw score 0-100 (JSON, no discretization)** |
+| Dataset | 18 questions | 18 questions | **42 questions** (5 categories) | **42 questions** (5 categories) |
+| Multi-run | No | Yes (3 runs) | Yes (3 runs) | Yes (3 runs) |
+| Calibration | — | — | Discretized → inflated scores ~+2.4 pts | **Raw scores, not inflated** |
 
 ### Gains by Component
 
@@ -606,7 +613,9 @@ Semantic only                   70% ──────────────�
 + Smart rechunking              85%  (+1%)  ─────────────┘
 + Intent Classification         86%  (targeted prompts)    → Precision
 + LangGraph Agent               89%  (+1.5%)               → Tools + control
-+ Content-based tables          92%  (+2.9%)               → Complete data
++ Content-based tables          89.7% (+0.5%)¹            → Complete data
+¹ Real chunking gain is ~+2.9% but masked by the removal of
+  discretization that inflated previous scores by ~2.4 pts.
 ```
 
 ---

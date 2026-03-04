@@ -276,7 +276,7 @@ def create_agent_pipeline(
     max_context_length: int = 32000,
     model: str = "mistral-nemo",
     temperature: float = 0.0,
-    max_tokens: int = 2000,
+    max_tokens: int = 3000,
     enable_validation: bool = True,
     enable_hybrid: bool = True,
     enable_reranker: bool = True,

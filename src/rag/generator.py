@@ -33,7 +33,7 @@ class Generator:
         llm_provider,
         model: str = "mistral-nemo",
         temperature: float = 0.1,  # Basse pour réponses factuelles
-        max_tokens: int = 1500
+        max_tokens: int = 3000
     ):
         """
         Args:
@@ -174,7 +174,7 @@ def create_generator(
     llm_provider,
     model: str = "mistral-nemo",
     temperature: float = 0.1,
-    max_tokens: int = 1500
+    max_tokens: int = 3000
 ) -> Generator:
     """Factory function pour créer un generator"""
     return Generator(

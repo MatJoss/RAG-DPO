@@ -27,6 +27,7 @@ sys.path.insert(0, str(project_root / 'src' / 'processing'))
 
 from llm_provider import RAGConfig
 from json_cleaner import clean_llm_json_response, safe_parse_json
+from rgpd_topics import parse_tags, TAG_PROMPT_TABLE
 
 logging.basicConfig(
     level=logging.INFO,
@@ -137,11 +138,21 @@ class StructuralChunker:
             chunks = []
             current = {'text': '', 'heading': ''}
             
-            for elem in content_block.find_all(['h2', 'h3', 'p', 'ul']):
+            for elem in content_block.find_all(['h2', 'h3', 'p', 'ul', 'table']):
                 if elem.name in ['h2', 'h3']:
                     if current['text']:
                         chunks.append(current)
                     current = {'text': elem.get_text(strip=True), 'heading': elem.get_text(strip=True)}
+                elif elem.name == 'table':
+                    # ── Détection content-based : table HTML → pipeline LLM ──
+                    # Flush le texte courant avant la table
+                    if current['text']:
+                        chunks.append(current)
+                        current = {'text': '', 'heading': current.get('heading', '')}
+                    
+                    table_chunks = self._convert_html_table(elem, current.get('heading', ''))
+                    if table_chunks:
+                        chunks.extend(table_chunks)
                 else:
                     current['text'] += ' ' + elem.get_text(strip=True)
             
@@ -152,8 +163,77 @@ class StructuralChunker:
         except:
             return []
     
+    def _convert_html_table(self, table_elem, heading: str) -> List[Dict]:
+        """Convertit une <table> HTML en chunks via le pipeline LLM tableur.
+        
+        1. Extraire les lignes (th/td) comme listes de cellules
+        2. Appeler _convert_table_rows() (pipeline commun)
+        """
+        # Extraire les lignes comme listes de cellules (même format que spreadsheets)
+        rows = []
+        for tr in table_elem.find_all('tr'):
+            cells = [c.get_text(strip=True) for c in tr.find_all(['th', 'td'])]
+            if any(c for c in cells):
+                rows.append(cells)
+        
+        if len(rows) < 2:
+            # Table triviale → texte plat suffit
+            flat = table_elem.get_text(strip=True)
+            if flat:
+                return [{'text': flat, 'heading': heading}]
+            return []
+        
+        return self._convert_table_rows(rows, heading)
+    
+    def _convert_table_rows(self, rows: List[List[str]], heading: str) -> List[Dict]:
+        """Pipeline commun : convertit des lignes de cellules en chunks via LLM.
+        
+        Utilisé par : HTML <table>, DOCX tables, et potentiellement PDF tables.
+        Réutilise le pipeline spreadsheet (zones, split, pipe-text, LLM Nemo).
+        """
+        # Initialiser LLM si pas encore fait
+        if not hasattr(self, '_llm'):
+            try:
+                config = RAGConfig()
+                self._llm = config.llm_provider
+            except Exception as e:
+                logger.warning(f"LLM indisponible pour conversion tableau: {e}")
+                self._llm = None
+        
+        context = heading or 'Tableau'
+        zones = self._segment_sheet_zones(rows)
+        
+        chunks = []
+        for zone_rows in zones:
+            sub_zones = self._split_large_zone(zone_rows)
+            for sub_zone in sub_zones:
+                raw_table_text = self._zone_to_table_text(sub_zone, context)
+                if not raw_table_text or len(raw_table_text.split()) < 10:
+                    continue
+                
+                llm_result = self._llm_convert_table(raw_table_text, context)
+                natural_text = llm_result['text']
+                tags = llm_result.get('tags', [])
+                
+                if not natural_text or len(natural_text.split()) < 15:
+                    continue
+                
+                sub_chunks = self._split_long_text(natural_text, heading, tags=tags, max_words=500)
+                chunks.extend(sub_chunks)
+        
+        return chunks
+    
+    def _convert_docx_table(self, rows: List[List[str]], heading: str) -> List[Dict]:
+        """Convertit un tableau Word (lignes de cellules) en chunks via pipeline LLM."""
+        return self._convert_table_rows(rows, heading)
+    
     def chunk_pdf(self, file_path: Path) -> List[Dict]:
         """Chunking PDF par structure (TOC, font size, ou pages).
+        
+        Pipeline :
+        1. Extraction content-based des tableaux (PyMuPDF find_tables → LLM)
+        2. Chunking textuel (TOC / font / pages / vision)
+        3. Fusion des deux flux
         
         Fallback vision : si le texte extractible est trop pauvre (infographie),
         convertit les pages en images et les passe à LLaVA pour description.
@@ -162,19 +242,24 @@ class StructuralChunker:
             import fitz
             doc = fitz.open(file_path)
             
+            # ── Passe 1 : Extraction content-based des tableaux ──
+            table_chunks = self._extract_pdf_tables(doc, file_path.name)
+            
+            # ── Passe 2 : Chunking textuel (stratégies existantes) ──
+            
             # Stratégie 1 : Table des matières
             toc = doc.get_toc()
             if toc and len(toc) > 2:
-                chunks = self._chunk_pdf_by_toc(doc, toc)
+                text_chunks = self._chunk_pdf_by_toc(doc, toc)
                 doc.close()
-                if chunks:
-                    return self._post_process(chunks)
+                if text_chunks:
+                    return self._post_process(table_chunks + text_chunks)
             
             # Stratégie 2 : Détection titres par font size
-            chunks = self._chunk_pdf_by_font(doc)
+            text_chunks = self._chunk_pdf_by_font(doc)
             doc.close()
-            if chunks and len(chunks) > 1:
-                return self._post_process(chunks)
+            if text_chunks and len(text_chunks) > 1:
+                return self._post_process(table_chunks + text_chunks)
             
             # Stratégie 3 : Par pages groupées intelligemment
             doc2 = fitz.open(file_path)
@@ -189,13 +274,13 @@ class StructuralChunker:
             if len(total_text) < 500 and n_pages <= 10:
                 vision_chunks = self._chunk_pdf_visual(file_path, n_pages)
                 if vision_chunks:
-                    return self._post_process(vision_chunks)
+                    return self._post_process(table_chunks + vision_chunks)
             
-            if not any(t.strip() for t in text_pages):
+            if not any(t.strip() for t in text_pages) and not table_chunks:
                 return []
             
             # Grouper pages pour atteindre ~target_size mots
-            chunks = []
+            text_chunks = []
             current = {'text': '', 'heading': '', 'page_info': ''}
             page_start = 1
             
@@ -210,14 +295,58 @@ class StructuralChunker:
                     if current['text'].strip():
                         page_end = i + 1
                         current['page_info'] = f'Page {page_start}' if page_start == page_end else f'Pages {page_start}-{page_end}'
-                        chunks.append(current)
+                        text_chunks.append(current)
                     current = {'text': '', 'heading': '', 'page_info': ''}
                     page_start = i + 2
             
-            return self._post_process(chunks)
+            return self._post_process(table_chunks + text_chunks)
         except Exception as e:
             logger.warning(f"PDF chunking failed for {file_path.name}: {e}")
             return []
+    
+    def _extract_pdf_tables(self, doc, filename: str) -> List[Dict]:
+        """Extrait les tableaux d'un PDF via PyMuPDF find_tables() → pipeline LLM.
+        
+        Pour chaque page, détecte les tableaux, extrait les cellules comme
+        listes de lignes, puis passe par _convert_table_rows() (même pipeline
+        que HTML/DOCX/spreadsheets).
+        """
+        all_table_chunks = []
+        
+        for page_idx, page in enumerate(doc):
+            try:
+                tables = page.find_tables()
+                if not tables.tables:
+                    continue
+                
+                for table in tables.tables:
+                    # Extraire les données : list[list[str|None]]
+                    data = table.extract()
+                    if not data or len(data) < 2:
+                        continue
+                    
+                    # Normaliser : None → '', strip
+                    rows = []
+                    for row in data:
+                        cells = [(c or '').strip() for c in row]
+                        if any(c for c in cells):
+                            rows.append(cells)
+                    
+                    if len(rows) < 2:
+                        continue
+                    
+                    heading = f"Tableau page {page_idx + 1}"
+                    table_chunks = self._convert_table_rows(rows, heading)
+                    all_table_chunks.extend(table_chunks)
+                    
+            except Exception as e:
+                logger.debug(f"Table extraction failed on {filename} p{page_idx+1}: {e}")
+                continue
+        
+        if all_table_chunks:
+            logger.info(f"📊 PDF {filename}: {len(all_table_chunks)} chunks tabulaires extraits")
+        
+        return all_table_chunks
     
     def _chunk_pdf_by_toc(self, doc, toc) -> List[Dict]:
         """Chunk PDF par table des matières"""
@@ -400,23 +529,81 @@ Sois exhaustif sur les données chiffrées et le texte visible. Pas de préambul
             return []
     
     def _chunk_spreadsheet(self, file_path: Path, file_type: str) -> List[Dict]:
-        """Chunking spreadsheets par feuille"""
+        """Chunking spreadsheets sémantique v2 : segmentation en zones + LLM Nemo.
+        
+        Stratégie :
+        1. Extraire toutes les lignes comme listes de cellules
+        2. Segmenter chaque feuille en zones sémantiques (séparées par lignes vides)
+        3. Sérialiser chaque zone en texte tabulaire lisible
+        4. Appeler LLM Nemo pour convertir en texte naturel (phrases sujet-verbe-complément)
+        5. Découper si trop long
+        """
         MAX_SHEETS = 20
         MAX_ROWS = 500
+        
+        all_sheets_rows = self._extract_spreadsheet_rows(file_path, file_type, MAX_SHEETS, MAX_ROWS)
+        
+        # Initialiser LLM si pas encore fait
+        if not hasattr(self, '_llm'):
+            try:
+                config = RAGConfig()
+                self._llm = config.llm_provider
+            except Exception as e:
+                logger.warning(f"LLM indisponible pour conversion tableur: {e}")
+                self._llm = None
+        
         chunks = []
+        for sheet_name, rows in all_sheets_rows:
+            zones = self._segment_sheet_zones(rows)
+            
+            for zone_idx, zone_rows in enumerate(zones):
+                # Découper les zones trop grandes (taille dynamique ~250 mots)
+                sub_zones = self._split_large_zone(zone_rows)
+                
+                for sub_zone in sub_zones:
+                    # Sérialiser la zone en texte tabulaire brut
+                    raw_table_text = self._zone_to_table_text(sub_zone, sheet_name)
+                    
+                    if not raw_table_text or len(raw_table_text.split()) < 10:
+                        continue
+                    
+                    # Conversion LLM → texte naturel + tags
+                    llm_result = self._llm_convert_table(raw_table_text, sheet_name)
+                    natural_text = llm_result['text']
+                    tags = llm_result.get('tags', [])
+                    
+                    if not natural_text or len(natural_text.split()) < 15:
+                        continue
+                    
+                    # Découper si trop long (>500 mots → split par paragraphes)
+                    sub_chunks = self._split_long_text(natural_text, sheet_name, tags=tags, max_words=500)
+                    chunks.extend(sub_chunks)
+        
+        return self._post_process(chunks)
+    
+    def _extract_spreadsheet_rows(self, file_path: Path, file_type: str,
+                                   max_sheets: int, max_rows: int) -> List[tuple]:
+        """Extrait les lignes brutes de chaque feuille comme listes de cellules.
+        
+        Returns:
+            [(sheet_name, [row1_cells, row2_cells, ...]), ...]
+            Chaque row_cells est une liste de strings (cellules non vides + position).
+        """
+        result = []
         
         if file_type == 'xlsx':
             import openpyxl
             wb = openpyxl.load_workbook(file_path, read_only=True, data_only=True)
-            for sheet_name in wb.sheetnames[:MAX_SHEETS]:
+            for sheet_name in wb.sheetnames[:max_sheets]:
                 sheet = wb[sheet_name]
-                rows_text = []
-                for row in list(sheet.iter_rows(values_only=True))[:MAX_ROWS]:
-                    row_text = ' | '.join(str(c) for c in row if c)
-                    if row_text.strip():
-                        rows_text.append(row_text)
-                if rows_text:
-                    chunks.append({'text': '\n'.join(rows_text), 'heading': sheet_name, 'page_info': f'Feuille: {sheet_name}'})
+                rows = []
+                for row in list(sheet.iter_rows(values_only=True))[:max_rows]:
+                    cells = [str(c).strip() if c is not None else '' for c in row]
+                    # Garder la ligne si au moins une cellule non vide
+                    if any(c for c in cells):
+                        rows.append(cells)
+                if rows:
+                    result.append((sheet_name, rows))
             wb.close()
         
         elif file_type == 'ods':
@@ -424,40 +611,347 @@ Sois exhaustif sur les données chiffrées et le texte visible. Pas de préambul
             from odf.opendocument import load
             doc = load(str(file_path))
             sheets = doc.spreadsheet.getElementsByType(odf_table.Table)
-            for i, sheet in enumerate(sheets[:MAX_SHEETS]):
+            for i, sheet in enumerate(sheets[:max_sheets]):
                 sheet_name = sheet.getAttribute('name') or f"Sheet{i+1}"
-                rows_text = []
-                rows = sheet.getElementsByType(odf_table.TableRow)
-                for row in rows[:MAX_ROWS]:
-                    cells = row.getElementsByType(odf_table.TableCell)
-                    cell_values = []
-                    for cell in cells:
+                rows = []
+                for row in sheet.getElementsByType(odf_table.TableRow)[:max_rows]:
+                    cell_elements = row.getElementsByType(odf_table.TableCell)
+                    cells = []
+                    for cell in cell_elements:
                         paras = cell.getElementsByType(odf_text.P)
-                        cell_text = ' '.join(str(p) for p in paras)
-                        if cell_text.strip():
-                            cell_values.append(cell_text.strip())
-                    if cell_values:
-                        rows_text.append(' | '.join(cell_values))
-                if rows_text:
-                    chunks.append({'text': '\n'.join(rows_text), 'heading': sheet_name, 'page_info': f'Feuille: {sheet_name}'})
+                        cell_text = ' '.join(str(p) for p in paras).strip()
+                        cells.append(cell_text)
+                    if any(c for c in cells):
+                        rows.append(cells)
+                if rows:
+                    result.append((sheet_name, rows))
         
-        return self._post_process(chunks)
+        return result
+    
+    def _segment_sheet_zones(self, rows: List[List[str]]) -> List[List[List[str]]]:
+        """Segmente une feuille en zones sémantiques séparées par des lignes vides.
+        
+        Chaque zone est un bloc contigu de lignes non-vides.
+        Les zones trop petites (<2 lignes) sont fusionnées avec la suivante.
+        """
+        zones = []
+        current_zone = []
+        
+        for row in rows:
+            non_empty = [c for c in row if c.strip()]
+            if not non_empty:
+                # Ligne vide → fin de zone
+                if current_zone:
+                    zones.append(current_zone)
+                    current_zone = []
+            else:
+                current_zone.append(row)
+        
+        # Dernière zone
+        if current_zone:
+            zones.append(current_zone)
+        
+        # Fusionner zones trop petites (1 ligne) avec la suivante
+        merged = []
+        buffer = None
+        for zone in zones:
+            if buffer is not None:
+                # Fusionner le buffer avec cette zone
+                merged.append(buffer + zone)
+                buffer = None
+            elif len(zone) == 1 and len(zone[0]) > 0:
+                # Zone d'1 ligne : potentiellement un titre, buffer pour fusionner
+                # Sauf si la cellule est très longue (>200 chars) → c'est un bloc autonome
+                max_cell = max(len(c) for c in zone[0] if c.strip()) if any(c.strip() for c in zone[0]) else 0
+                if max_cell > 200:
+                    merged.append(zone)
+                else:
+                    buffer = zone
+            else:
+                merged.append(zone)
+        
+        if buffer:
+            if merged:
+                merged[-1] = merged[-1] + buffer
+            else:
+                merged.append(buffer)
+        
+        return merged
+    
+    def _split_large_zone(self, zone_rows: List[List[str]], max_words: int = 250) -> List[List[List[str]]]:
+        """Découpe une zone trop grande en sous-zones.
+        
+        Adapte dynamiquement le nombre de lignes par sous-zone pour
+        que chaque sous-zone produise ~max_words mots en entrée LLM.
+        La ligne d'en-têtes est préfixée à chaque sous-zone.
+        """
+        # Calculer la densité de mots par ligne
+        total_words = sum(len(' '.join(c for c in row if c.strip()).split()) for row in zone_rows)
+        avg_words_per_row = max(total_words / max(len(zone_rows), 1), 1)
+        # max_rows dynamique : viser max_words mots, plancher 5, plafond 20
+        max_rows = max(5, min(20, int(max_words / avg_words_per_row)))
+        
+        if len(zone_rows) <= max_rows:
+            return [zone_rows]
+        
+        # Heuristique : la première ligne est-elle un en-tête ?
+        # ≥2 cellules non vides, cellules courtes (<80 chars), pas numériques
+        first_row = zone_rows[0]
+        non_empty_first = [c for c in first_row if c.strip()]
+        numeric_count = sum(1 for c in non_empty_first
+                          if c.replace('.','').replace(',','').replace('-','').replace('/','').strip().isdigit())
+        is_header = (
+            len(non_empty_first) >= 2
+            and all(len(c) < 80 for c in non_empty_first)
+            and numeric_count < len(non_empty_first) * 0.5
+        )
+        
+        header_row = zone_rows[0] if is_header else None
+        data_start = 1 if is_header else 0
+        data_rows = zone_rows[data_start:]
+        
+        sub_zones = []
+        for i in range(0, len(data_rows), max_rows):
+            batch = data_rows[i:i + max_rows]
+            if header_row:
+                sub_zones.append([header_row] + batch)
+            else:
+                sub_zones.append(batch)
+        
+        return sub_zones
+    
+    def _zone_to_table_text(self, zone_rows: List[List[str]], sheet_name: str) -> str:
+        """Convertit une zone en texte tabulaire lisible pour le LLM.
+        
+        Format :
+        - Feuille : « nom »
+        - Ligne 1 : col0 | col1 | col2
+        - Ligne 2 : col0 | col1 | col2
+        """
+        lines = [f"Feuille : « {sheet_name} »"]
+        
+        for row in zone_rows:
+            # Filtrer les cellules vides en fin de ligne
+            cells = [c.strip() for c in row]
+            # Tronquer trailing empties
+            while cells and not cells[-1]:
+                cells.pop()
+            if not cells:
+                continue
+            
+            # Remplacer les vides intermédiaires par "(vide)"
+            display_cells = [c if c else '(vide)' for c in cells]
+            lines.append(' | '.join(display_cells))
+        
+        return '\n'.join(lines)
+    
+    def _llm_convert_table(self, raw_table_text: str, sheet_name: str) -> dict:
+        """Appelle Nemo LLM pour convertir un texte tabulaire en langage naturel
+        et extraire des tags de catégorisation RGPD.
+        
+        Returns:
+            dict avec 'text' (str) et 'tags' (list[str])
+        """
+        PROMPT = """Tu es un assistant spécialisé en protection des données personnelles (RGPD/CNIL).
+
+TÂCHE : Convertis ce tableau en texte naturel, lisible et complet, puis catégorise-le.
+
+RÈGLES POUR LE TEXTE :
+- Écris des phrases complètes sujet-verbe-complément
+- Conserve TOUTES les informations (noms, dates, durées, chiffres, articles de loi)
+- Ne résume pas, ne paraphrase pas : restitue fidèlement le contenu
+- Identifie les en-têtes de colonnes ou de lignes et utilise-les comme contexte
+- Si le tableau a des en-têtes en première ligne OU en première colonne, associe chaque valeur à son en-tête
+- Pour les listes de valeurs, utilise des énumérations naturelles
+- Ne mets pas de titre, écris directement le texte
+- Écris en français (même si le tableau est en anglais, traduis)
+
+RÈGLES POUR LES TAGS :
+- À la toute fin, ajoute une ligne commençant par [TAGS] suivie des thèmes RGPD couverts
+- Choisis 1 à 3 tags parmi : droits des personnes, consentement, sécurité des données, durée de conservation, sous-traitance, base légale, données sensibles, transfert hors UE, cookies, violation de données, transparence, DPO, vidéosurveillance, finalité du traitement, registre des traitements, AIPD, anonymisation, minimisation, responsable de traitement, prospection commerciale, conformité RGPD, profilage, sanctions CNIL, données de santé, information des personnes
+- Si aucun ne convient, propose un tag court et descriptif
+
+TABLEAU :
+{table_text}
+
+TEXTE NATUREL :"""
+        
+        if self._llm is None:
+            return self._mechanical_fallback(raw_table_text, sheet_name)
+        
+        try:
+            prompt = PROMPT.format(table_text=raw_table_text)
+            result = self._llm.generate(
+                prompt,
+                temperature=0.1,
+                max_tokens=2000,
+            )
+            
+            result = result.strip()
+            
+            if 'TABLEAU :' in result or 'RÈGLES POUR' in result:
+                logger.warning(f"LLM a régurgité le prompt pour {sheet_name}, fallback")
+                return self._mechanical_fallback(raw_table_text, sheet_name)
+            
+            # Détection copie brute : si le LLM a recopié le texte avec les pipes
+            pipe_count = result.count(' | ')
+            input_pipe_count = raw_table_text.count(' | ')
+            if input_pipe_count > 3 and pipe_count > input_pipe_count * 0.5:
+                logger.warning(f"LLM a recopié le tableau ({pipe_count} pipes) pour {sheet_name}, retry simplifié")
+                # Retry avec un prompt plus directif
+                retry_prompt = (
+                    "Réécris ce contenu en français courant, sans utiliser de tableaux ni de tirets. "
+                    "Chaque information doit être une phrase complète. "
+                    "Conserve toutes les données (noms, dates, durées, chiffres).\n\n"
+                    f"{raw_table_text}\n\nTexte réécrit :"
+                )
+                try:
+                    result = self._llm.generate(retry_prompt, temperature=0.2, max_tokens=2000).strip()
+                    pipe_count = result.count(' | ')
+                    if pipe_count > input_pipe_count * 0.3:
+                        logger.warning(f"Retry LLM toujours trop de pipes ({pipe_count}), fallback mécanique")
+                        return self._mechanical_fallback(raw_table_text, sheet_name)
+                except Exception as e:
+                    logger.warning(f"Erreur retry LLM ({sheet_name}): {e}")
+                    return self._mechanical_fallback(raw_table_text, sheet_name)
+            
+            # Extraire les tags [TAGS] de la fin de la réponse
+            tags = []
+            text_lines = result.split('\n')
+            clean_lines = []
+            for line in text_lines:
+                if line.strip().startswith('[TAGS]') or line.strip().startswith('[Tags]'):
+                    tags = parse_tags(line)
+                else:
+                    clean_lines.append(line)
+            
+            clean_text = '\n'.join(clean_lines).strip()
+            return {
+                'text': clean_text,
+                'tags': tags,
+            }
+            
+        except Exception as e:
+            logger.warning(f"Erreur LLM conversion tableau ({sheet_name}): {e}")
+            return self._mechanical_fallback(raw_table_text, sheet_name)
+    
+    def _mechanical_fallback(self, raw_table_text: str, sheet_name: str) -> dict:
+        """Fallback mécanique si LLM indisponible : transformation propre sans pipes."""
+        lines = raw_table_text.split('\n')
+        text_parts = []
+        for line in lines:
+            if line.startswith('Feuille :'):
+                continue
+            # Séparer les cellules
+            cells = [c.strip() for c in line.split(' | ')]
+            cells = [c for c in cells if c and c != '(vide)']
+            if not cells:
+                continue
+            if len(cells) == 1 and len(cells[0]) > 5:
+                text_parts.append(cells[0])
+            elif len(cells) == 2:
+                # Format clé-valeur
+                text_parts.append(f"{cells[0]} : {cells[1]}.")
+            elif len(cells) >= 3:
+                # Multi-colonnes : première cellule = label, reste = valeurs
+                values = ', '.join(cells[1:])
+                text_parts.append(f"{cells[0]} : {values}.")
+        return {'text': '\n'.join(text_parts), 'tags': []}
+    
+    def _split_long_text(self, text: str, context_name: str, tags: List[str] = None,
+                          max_words: int = 500) -> List[Dict]:
+        """Découpe un texte trop long en chunks de taille raisonnable.
+        Propage les tags RGPD dans chaque sous-chunk."""
+        if tags is None:
+            tags = []
+        words = text.split()
+        
+        if len(words) <= max_words:
+            return [{
+                'text': text,
+                'heading': context_name,
+                'page_info': context_name,
+                'rgpd_topics': tags,
+            }]
+        
+        # Découper par paragraphes (double newline)
+        paragraphs = text.split('\n\n')
+        chunks = []
+        current_text = []
+        current_wc = 0
+        
+        for para in paragraphs:
+            para_wc = len(para.split())
+            if current_wc + para_wc > max_words and current_text:
+                chunks.append({
+                    'text': '\n\n'.join(current_text),
+                    'heading': context_name,
+                    'page_info': context_name,
+                    'rgpd_topics': tags,
+                })
+                current_text = [para]
+                current_wc = para_wc
+            else:
+                current_text.append(para)
+                current_wc += para_wc
+        
+        if current_text:
+            chunks.append({
+                'text': '\n\n'.join(current_text),
+                'heading': context_name,
+                'page_info': context_name,
+                'rgpd_topics': tags,
+            })
+        
+        return chunks
     
     def _chunk_word(self, file_path: Path, file_type: str) -> List[Dict]:
-        """Chunking documents texte par sections"""
+        """Chunking documents texte par sections, avec détection de tableaux."""
         chunks = []
         
         if file_type == 'docx':
             from docx import Document
+            from docx.oxml.ns import qn
             doc = Document(file_path)
             current = {'text': '', 'heading': ''}
-            for para in doc.paragraphs:
-                if para.style.name.startswith('Heading'):
-                    if current['text'].strip():
-                        chunks.append(current)
-                    current = {'text': para.text, 'heading': para.text}
-                else:
-                    current['text'] += '\n' + para.text
+            
+            # Parcourir body dans l'ordre du DOM (paragraphes ET tables mélangés)
+            body = doc.element.body
+            for child in body:
+                if child.tag == qn('w:p'):
+                    # C'est un paragraphe
+                    from docx.text.paragraph import Paragraph
+                    para = Paragraph(child, body)
+                    if para.style and para.style.name.startswith('Heading'):
+                        if current['text'].strip():
+                            chunks.append(current)
+                        current = {'text': para.text, 'heading': para.text}
+                    else:
+                        current['text'] += '\n' + para.text
+                elif child.tag == qn('w:tbl'):
+                    # C'est un tableau → pipeline LLM
+                    from docx.table import Table
+                    table = Table(child, body)
+                    rows = []
+                    for row in table.rows:
+                        cells = [c.text.strip() for c in row.cells]
+                        if any(c for c in cells):
+                            rows.append(cells)
+                    
+                    if len(rows) >= 2:
+                        # Flush texte courant
+                        if current['text'].strip():
+                            chunks.append(current)
+                            current = {'text': '', 'heading': current.get('heading', '')}
+                        
+                        table_chunks = self._convert_docx_table(rows, current.get('heading', ''))
+                        if table_chunks:
+                            chunks.extend(table_chunks)
+                    elif rows:
+                        # Table triviale → texte plat
+                        flat = ' '.join(' '.join(c for c in r if c) for r in rows)
+                        current['text'] += '\n' + flat
+            
             if current['text'].strip():
                 chunks.append(current)
         

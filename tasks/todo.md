@@ -1,6 +1,37 @@
 # Todo List — RAG-DPO System
 
-**Dernière MAJ** : 2026-03-01
+**Dernière MAJ** : 2026-03-03
+
+---
+
+## 🏷️ Chantier Tags RGPD — Vocabulaire guidé + Semantic Matching
+
+### Terminé ✅
+- [x] `rgpd_topics.py` : 25 catégories RGPD normalisées + prompt guidé
+- [x] `TopicMatcher` : boost sémantique via BGE-M3 (cache, cosine, bonus 0-0.15)
+- [x] `parse_tags()` : split ,/; + normalisation lowercase + max 3
+- [x] 3 chunkers : prompts alignés sur les 25 catégories
+- [x] `intent_classifier.py` : prompt topics aligné
+- [x] `reranker.py` : topic_boost intégré
+- [x] `pipeline.py` : TopicMatcher initialisé, topics passés au reranker
+- [x] `tag_all_chunks.py` : tqdm, --retry-failed, vocabulaire guidé
+- [x] Intégré dans `rebuild_pipeline.py` (étape 6d) et `update_cnil.py` (étape 8b)
+- [x] Test batch 10 : 14 tags uniques, quasi tous dans les 25 catégories ✅
+
+### Détection tableaux content-based ✅
+- [x] `_convert_table_rows()` : pipeline commun (zones → split → pipe-text → LLM Nemo)
+- [x] `chunk_html()` : détection `<table>` → `_convert_html_table()` (39 HTML concernés)
+- [x] `chunk_pdf()` : `_extract_pdf_tables()` via PyMuPDF `find_tables()` (264 PDF concernés, 54%)
+- [x] `_chunk_word()` : détection `doc.tables` via python-docx DOM (1 DOCX concerné)
+- [x] `_llm_convert_table()` / `_mechanical_fallback()` : préfixe "Feuille" supprimé (heading suffit)
+- [x] `_split_long_text()` : renommé `sheet_name` → `context_name` (générique)
+- [x] Tests validés : HTML 1 table → 7 chunks, PDF 1 table → 1 chunk (texte naturel)
+
+### À faire 🔲
+- [ ] Rechunk complet (rebuild_pipeline.py) pour inclure tables HTML/PDF/DOCX
+- [ ] Exécuter `tag_all_chunks.py --force` sur les chunks (~2-3h) — refaire avec prompt guidé
+- [ ] Re-run benchmark (3 runs) pour mesurer impact
+- [ ] README update + git push
 
 ---
 

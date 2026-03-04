@@ -85,9 +85,15 @@ STEPS = {
         'args': [],
         'description': 'Purge pages navigation, archive fichiers, nettoie ChromaDB/JSONL',
     },
+    '6d': {
+        'name': 'Phase 6D : Tagging RGPD des chunks (Nemo)',
+        'script': 'tag_all_chunks.py',
+        'args': [],
+        'description': 'Ajoute des tags RGPD libres à tous les chunks via LLM (idempotent)',
+    },
 }
 
-STEP_ORDER = ['3', '4', '4b', '4c', '5a', '5b', '6a', '6b', '6c']
+STEP_ORDER = ['3', '4', '4b', '4c', '5a', '5b', '6a', '6b', '6c', '6d']
 
 
 def run_step(step_id: str, test_mode: int = None, fresh: bool = False):

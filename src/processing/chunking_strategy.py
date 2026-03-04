@@ -3,11 +3,17 @@ Chunking Intelligent avec Fallbacks Multiples
 Adapté pour LLM local (Mistral via Ollama)
 """
 
+import sys
 from pathlib import Path
 from typing import List, Dict, Tuple, Optional
 import logging
 from bs4 import BeautifulSoup
 import re
+
+# Ajouter chemin utils
+_project_root = Path(__file__).parent.parent.parent
+sys.path.insert(0, str(_project_root / 'src' / 'utils'))
+from rgpd_topics import parse_tags, TAG_PROMPT_TABLE
 
 logger = logging.getLogger(__name__)
 
@@ -612,144 +618,70 @@ class SemanticChunker:
     # =========================================================================
     
     def chunk_spreadsheet(self, file_path: Path, doc_metadata: Dict) -> List[ChunkMetadata]:
-        """Chunk ODS/XLSX par feuille (toutes les feuilles) avec limite configurable"""
+        """Chunk ODS/XLSX sémantique v2 : segmentation en zones + LLM Nemo.
+        
+        Stratégie :
+        1. Extraire lignes brutes comme listes de cellules
+        2. Segmenter en zones sémantiques (séparées par lignes vides)
+        3. Sérialiser chaque zone en texte tabulaire lisible
+        4. Appeler LLM Nemo pour convertir en texte naturel
+        5. Découper si trop long
+        """
         
         ext = file_path.suffix.lower()
-        
-        # Limite de sécurité (éviter fichiers avec 50+ feuilles)
         MAX_SHEETS = 20
         MAX_ROWS_PER_SHEET = 1000
         
         try:
-            if ext == '.ods':
-                from odf import table as odf_table
-                from odf.opendocument import load
-                from odf import text as odf_text
+            all_sheets_rows = self._extract_sheet_rows(file_path, ext, MAX_SHEETS, MAX_ROWS_PER_SHEET)
+            
+            # Initialiser LLM si pas encore fait
+            if not hasattr(self, '_llm'):
+                try:
+                    from llm_provider import RAGConfig
+                    config = RAGConfig()
+                    self._llm = config.llm_provider
+                except Exception as e:
+                    logger.warning(f"LLM indisponible pour conversion tableur: {e}")
+                    self._llm = None
+            
+            chunks = []
+            for sheet_name, rows in all_sheets_rows:
+                zones = self._segment_sheet_zones(rows)
                 
-                doc = load(str(file_path))
-                sheets = doc.spreadsheet.getElementsByType(odf_table.Table)
-                
-                # Limiter nombre de feuilles
-                sheets_to_process = sheets[:MAX_SHEETS]
-                
-                if len(sheets) > MAX_SHEETS:
-                    logger.warning(f"  ⚠️  ODS a {len(sheets)} feuilles, limité à {MAX_SHEETS}")
-                
-                chunks = []
-                for i, sheet in enumerate(sheets_to_process):
-                    sheet_name = sheet.getAttribute('name') or f"Sheet{i+1}"
+                for zone_idx, zone_rows in enumerate(zones):
+                    sub_zones = self._split_large_zone(zone_rows)
                     
-                    # Extraire texte
-                    rows = sheet.getElementsByType(odf_table.TableRow)
-                    text_rows = []
-                    
-                    for row in rows[:MAX_ROWS_PER_SHEET]:
-                        cells = row.getElementsByType(odf_table.TableCell)
-                        cell_values = []
-                        for cell in cells:
-                            paras = cell.getElementsByType(odf_text.P)
-                            cell_text = ' '.join([str(p) for p in paras])
-                            if cell_text.strip():
-                                cell_values.append(cell_text.strip())
+                    for sub_zone in sub_zones:
+                        raw_table_text = self._zone_to_table_text(sub_zone, sheet_name)
                         
-                        if cell_values:
-                            text_rows.append(' | '.join(cell_values))
+                        if not raw_table_text or len(raw_table_text.split()) < 10:
+                            continue
+                        
+                        llm_result = self._llm_convert_table(raw_table_text, sheet_name)
+                        natural_text = llm_result['text']
+                        tags = llm_result.get('tags', [])
+                        
+                        if not natural_text or len(natural_text.split()) < 15:
+                            continue
+                        
+                        # Découper si trop long
+                        sub_texts = self._split_natural_text(natural_text, max_words=500)
                     
-                    if not text_rows:
-                        logger.debug(f"  ⏭️  Feuille '{sheet_name}' vide, skip")
-                        continue
-                    
-                    text = '\n'.join(text_rows)
-                    word_count = len(text.split())
-                    
-                    # Vérifier taille
-                    if word_count <= self.config.MAX_CHUNK_SIZE:
+                    for sub_text in sub_texts:
                         chunks.append(ChunkMetadata(
-                            chunk_id=f"{doc_metadata['doc_id']}_sheet_{i}",
+                            chunk_id=f"{doc_metadata['doc_id']}_sheet_{sheet_name}_{len(chunks)}",
                             parent_doc=doc_metadata['doc_id'],
-                            chunk_text=text,
+                            chunk_text=sub_text,
                             chunk_type="sheet",
                             section=sheet_name,
                             position=f"{len(chunks)+1}/?",
                         ))
-                    else:
-                        # Feuille trop grosse → split par groupes de lignes
-                        lines_per_chunk = max(50, int(self.config.TARGET_CHUNK_SIZE / (word_count / len(text_rows))))
-                        
-                        logger.debug(f"  ⚠️  Feuille '{sheet_name}' trop grosse ({word_count} mots), split en groupes de {lines_per_chunk} lignes")
-                        
-                        for j in range(0, len(text_rows), lines_per_chunk):
-                            chunk_text = '\n'.join(text_rows[j:j+lines_per_chunk])
-                            chunks.append(ChunkMetadata(
-                                chunk_id=f"{doc_metadata['doc_id']}_sheet_{i}_part{j//lines_per_chunk}",
-                                parent_doc=doc_metadata['doc_id'],
-                                chunk_text=chunk_text,
-                                chunk_type="sheet_part",
-                                section=f"{sheet_name} (lignes {j+1}-{min(j+lines_per_chunk, len(text_rows))})",
-                                position=f"{len(chunks)+1}/?",
-                            ))
             
-            else:  # XLSX
-                import openpyxl
-                
-                wb = openpyxl.load_workbook(file_path, read_only=True, data_only=True)
-                chunks = []
-                
-                # Limiter nombre de feuilles
-                sheet_names = wb.sheetnames[:MAX_SHEETS]
-                
-                if len(wb.sheetnames) > MAX_SHEETS:
-                    logger.warning(f"  ⚠️  XLSX a {len(wb.sheetnames)} feuilles, limité à {MAX_SHEETS}")
-                
-                for i, sheet_name in enumerate(sheet_names):
-                    sheet = wb[sheet_name]
-                    
-                    text_rows = []
-                    for row in list(sheet.iter_rows(values_only=True))[:MAX_ROWS_PER_SHEET]:
-                        row_text = ' | '.join([str(cell) for cell in row if cell])
-                        if row_text.strip():
-                            text_rows.append(row_text)
-                    
-                    if not text_rows:
-                        logger.debug(f"  ⏭️  Feuille '{sheet_name}' vide, skip")
-                        continue
-                    
-                    text = '\n'.join(text_rows)
-                    word_count = len(text.split())
-                    
-                    if word_count <= self.config.MAX_CHUNK_SIZE:
-                        chunks.append(ChunkMetadata(
-                            chunk_id=f"{doc_metadata['doc_id']}_sheet_{i}",
-                            parent_doc=doc_metadata['doc_id'],
-                            chunk_text=text,
-                            chunk_type="sheet",
-                            section=sheet_name,
-                            position=f"{len(chunks)+1}/?",
-                        ))
-                    else:
-                        lines_per_chunk = max(50, int(self.config.TARGET_CHUNK_SIZE / (word_count / len(text_rows))))
-                        
-                        logger.debug(f"  ⚠️  Feuille '{sheet_name}' trop grosse ({word_count} mots), split en groupes de {lines_per_chunk} lignes")
-                        
-                        for j in range(0, len(text_rows), lines_per_chunk):
-                            chunk_text = '\n'.join(text_rows[j:j+lines_per_chunk])
-                            chunks.append(ChunkMetadata(
-                                chunk_id=f"{doc_metadata['doc_id']}_sheet_{i}_part{j//lines_per_chunk}",
-                                parent_doc=doc_metadata['doc_id'],
-                                chunk_text=chunk_text,
-                                chunk_type="sheet_part",
-                                section=f"{sheet_name} (lignes {j+1}-{min(j+lines_per_chunk, len(text_rows))})",
-                                position=f"{len(chunks)+1}/?",
-                            ))
-                
-                wb.close()
-            
-            # Update positions avec relations
+            # Update positions
             total = len(chunks)
             for i, chunk in enumerate(chunks):
                 chunk.position = f"{i+1}/{total}"
-                
-                # Ajouter feuilles adjacentes dans related
                 if i > 0:
                     chunk.related_chunks.append(chunks[i-1].chunk_id)
                 if i < total - 1:
@@ -760,18 +692,17 @@ class SemanticChunker:
                 return [ChunkMetadata(
                     chunk_id=f"{doc_metadata['doc_id']}_empty",
                     parent_doc=doc_metadata['doc_id'],
-                    chunk_text=f"[Spreadsheet vide]",
+                    chunk_text="[Spreadsheet vide]",
                     chunk_type="empty",
                     section="Vide",
                     position="1/1",
                 )]
             
-            logger.debug(f"  ✅ {len(chunks)} chunks créés depuis {total} feuilles")
+            logger.debug(f"  ✅ {len(chunks)} chunks sémantiques depuis {file_path.name}")
             return chunks
         
         except Exception as e:
             logger.error(f"❌ Erreur chunking spreadsheet: {e}")
-            # Retourner chunk d'erreur
             return [ChunkMetadata(
                 chunk_id=f"{doc_metadata['doc_id']}_failed",
                 parent_doc=doc_metadata['doc_id'],
@@ -780,6 +711,266 @@ class SemanticChunker:
                 section="Erreur",
                 position="1/1",
             )]
+    
+    def _extract_sheet_rows(self, file_path: Path, ext: str,
+                             max_sheets: int, max_rows: int) -> List[tuple]:
+        """Extrait les lignes brutes de chaque feuille comme listes de cellules."""
+        result = []
+        
+        if ext == '.ods':
+            from odf import table as odf_table
+            from odf.opendocument import load
+            from odf import text as odf_text
+            
+            doc = load(str(file_path))
+            sheets = doc.spreadsheet.getElementsByType(odf_table.Table)
+            
+            for i, sheet in enumerate(sheets[:max_sheets]):
+                sheet_name = sheet.getAttribute('name') or f"Sheet{i+1}"
+                rows = []
+                for row in sheet.getElementsByType(odf_table.TableRow)[:max_rows]:
+                    cells_el = row.getElementsByType(odf_table.TableCell)
+                    cells = []
+                    for cell in cells_el:
+                        paras = cell.getElementsByType(odf_text.P)
+                        cell_text = ' '.join(str(p) for p in paras).strip()
+                        cells.append(cell_text)
+                    if any(c for c in cells):
+                        rows.append(cells)
+                if rows:
+                    result.append((sheet_name, rows))
+        
+        else:  # XLSX
+            import openpyxl
+            wb = openpyxl.load_workbook(file_path, read_only=True, data_only=True)
+            
+            sheet_names = wb.sheetnames[:max_sheets]
+            for sheet_name in sheet_names:
+                sheet = wb[sheet_name]
+                rows = []
+                for row in list(sheet.iter_rows(values_only=True))[:max_rows]:
+                    cells = [str(c).strip() if c is not None else '' for c in row]
+                    if any(c for c in cells):
+                        rows.append(cells)
+                if rows:
+                    result.append((sheet_name, rows))
+            wb.close()
+        
+        return result
+    
+    def _segment_sheet_zones(self, rows: List[List[str]]) -> List[List[List[str]]]:
+        """Segmente une feuille en zones sémantiques séparées par des lignes vides."""
+        zones = []
+        current_zone = []
+        
+        for row in rows:
+            non_empty = [c for c in row if c.strip()]
+            if not non_empty:
+                if current_zone:
+                    zones.append(current_zone)
+                    current_zone = []
+            else:
+                current_zone.append(row)
+        
+        if current_zone:
+            zones.append(current_zone)
+        
+        # Fusionner zones trop petites (1 ligne) avec la suivante
+        merged = []
+        buffer = None
+        for zone in zones:
+            if buffer is not None:
+                merged.append(buffer + zone)
+                buffer = None
+            elif len(zone) == 1:
+                max_cell = max((len(c) for c in zone[0] if c.strip()), default=0)
+                if max_cell > 200:
+                    merged.append(zone)
+                else:
+                    buffer = zone
+            else:
+                merged.append(zone)
+        
+        if buffer:
+            if merged:
+                merged[-1] = merged[-1] + buffer
+            else:
+                merged.append(buffer)
+        
+        return merged
+    
+    def _split_large_zone(self, zone_rows: List[List[str]], max_words: int = 250) -> List[List[List[str]]]:
+        """Découpe une zone trop grande en sous-zones.
+        
+        Adapte dynamiquement le nombre de lignes par sous-zone pour
+        que chaque sous-zone produise ~max_words mots en entrée LLM.
+        La ligne d'en-têtes est préfixée à chaque sous-zone.
+        """
+        total_words = sum(len(' '.join(c for c in row if c.strip()).split()) for row in zone_rows)
+        avg_words_per_row = max(total_words / max(len(zone_rows), 1), 1)
+        max_rows = max(5, min(20, int(max_words / avg_words_per_row)))
+        
+        if len(zone_rows) <= max_rows:
+            return [zone_rows]
+        
+        first_row = zone_rows[0]
+        non_empty_first = [c for c in first_row if c.strip()]
+        numeric_count = sum(1 for c in non_empty_first
+                          if c.replace('.','').replace(',','').replace('-','').replace('/','').strip().isdigit())
+        is_header = (
+            len(non_empty_first) >= 2
+            and all(len(c) < 80 for c in non_empty_first)
+            and numeric_count < len(non_empty_first) * 0.5
+        )
+        
+        header_row = zone_rows[0] if is_header else None
+        data_start = 1 if is_header else 0
+        data_rows = zone_rows[data_start:]
+        
+        sub_zones = []
+        for i in range(0, len(data_rows), max_rows):
+            batch = data_rows[i:i + max_rows]
+            if header_row:
+                sub_zones.append([header_row] + batch)
+            else:
+                sub_zones.append(batch)
+        
+        return sub_zones
+    
+    def _zone_to_table_text(self, zone_rows: List[List[str]], sheet_name: str) -> str:
+        """Convertit une zone en texte tabulaire lisible pour le LLM."""
+        lines = [f"Feuille : « {sheet_name} »"]
+        
+        for row in zone_rows:
+            cells = [c.strip() for c in row]
+            while cells and not cells[-1]:
+                cells.pop()
+            if not cells:
+                continue
+            display_cells = [c if c else '(vide)' for c in cells]
+            lines.append(' | '.join(display_cells))
+        
+        return '\n'.join(lines)
+    
+    def _llm_convert_table(self, raw_table_text: str, sheet_name: str) -> dict:
+        """Appelle Nemo LLM pour convertir un texte tabulaire en langage naturel + tags."""
+        PROMPT = """Tu es un assistant spécialisé en protection des données personnelles (RGPD/CNIL).
+
+TÂCHE : Convertis ce tableau en texte naturel, lisible et complet, puis catégorise-le.
+
+RÈGLES POUR LE TEXTE :
+- Écris des phrases complètes sujet-verbe-complément
+- Conserve TOUTES les informations (noms, dates, durées, chiffres, articles de loi)
+- Ne résume pas, ne paraphrase pas : restitue fidèlement le contenu
+- Identifie les en-têtes de colonnes ou de lignes et utilise-les comme contexte
+- Si le tableau a des en-têtes en première ligne OU en première colonne, associe chaque valeur à son en-tête
+- Pour les listes de valeurs, utilise des énumérations naturelles
+- Ne mets pas de titre, écris directement le texte
+- Écris en français (même si le tableau est en anglais, traduis)
+
+RÈGLES POUR LES TAGS :
+- À la toute fin, ajoute une ligne commençant par [TAGS] suivie des thèmes RGPD couverts
+- Choisis 1 à 3 tags parmi : droits des personnes, consentement, sécurité des données, durée de conservation, sous-traitance, base légale, données sensibles, transfert hors UE, cookies, violation de données, transparence, DPO, vidéosurveillance, finalité du traitement, registre des traitements, AIPD, anonymisation, minimisation, responsable de traitement, prospection commerciale, conformité RGPD, profilage, sanctions CNIL, données de santé, information des personnes
+- Si aucun ne convient, propose un tag court et descriptif
+
+TABLEAU :
+{table_text}
+
+TEXTE NATUREL :"""
+        
+        if self._llm is None:
+            return self._mechanical_fallback(raw_table_text, sheet_name)
+        
+        try:
+            prompt = PROMPT.format(table_text=raw_table_text)
+            result = self._llm.generate(prompt, temperature=0.1, max_tokens=2000)
+            result = result.strip()
+            
+            if 'TABLEAU :' in result or 'RÈGLES POUR' in result:
+                return self._mechanical_fallback(raw_table_text, sheet_name)
+            
+            # Détection copie brute : si le LLM a recopié le texte avec les pipes
+            pipe_count = result.count(' | ')
+            input_pipe_count = raw_table_text.count(' | ')
+            if input_pipe_count > 3 and pipe_count > input_pipe_count * 0.5:
+                logger.warning(f"LLM a recopié le tableau ({pipe_count} pipes) pour {sheet_name}, retry simplifié")
+                retry_prompt = (
+                    "Réécris ce contenu en français courant, sans utiliser de tableaux ni de tirets. "
+                    "Chaque information doit être une phrase complète. "
+                    "Conserve toutes les données (noms, dates, durées, chiffres).\n\n"
+                    f"{raw_table_text}\n\nTexte réécrit :"
+                )
+                try:
+                    result = self._llm.generate(retry_prompt, temperature=0.2, max_tokens=2000).strip()
+                    pipe_count = result.count(' | ')
+                    if pipe_count > input_pipe_count * 0.3:
+                        return self._mechanical_fallback(raw_table_text, sheet_name)
+                except Exception as e:
+                    logger.warning(f"Erreur retry LLM ({sheet_name}): {e}")
+                    return self._mechanical_fallback(raw_table_text, sheet_name)
+            
+            # Extraire les tags
+            tags = []
+            text_lines = result.split('\n')
+            clean_lines = []
+            for line in text_lines:
+                if line.strip().startswith('[TAGS]') or line.strip().startswith('[Tags]'):
+                    tags = parse_tags(line)
+                else:
+                    clean_lines.append(line)
+            
+            clean_text = '\n'.join(clean_lines).strip()
+            return {'text': f"Feuille « {sheet_name} »\n\n{clean_text}", 'tags': tags}
+            
+        except Exception as e:
+            logger.warning(f"Erreur LLM conversion tableau ({sheet_name}): {e}")
+            return self._mechanical_fallback(raw_table_text, sheet_name)
+    
+    def _mechanical_fallback(self, raw_table_text: str, sheet_name: str) -> dict:
+        """Fallback mécanique si LLM indisponible : transformation propre sans pipes."""
+        lines = raw_table_text.split('\n')
+        text_parts = [f"Feuille « {sheet_name} »"]
+        for line in lines:
+            if line.startswith('Feuille :'):
+                continue
+            cells = [c.strip() for c in line.split(' | ')]
+            cells = [c for c in cells if c and c != '(vide)']
+            if not cells:
+                continue
+            if len(cells) == 1 and len(cells[0]) > 5:
+                text_parts.append(cells[0])
+            elif len(cells) == 2:
+                text_parts.append(f"{cells[0]} : {cells[1]}.")
+            elif len(cells) >= 3:
+                values = ', '.join(cells[1:])
+                text_parts.append(f"{cells[0]} : {values}.")
+        return {'text': '\n'.join(text_parts), 'tags': []}
+    
+    def _split_natural_text(self, text: str, max_words: int = 500) -> List[str]:
+        """Découpe un texte trop long en morceaux."""
+        words = text.split()
+        if len(words) <= max_words:
+            return [text]
+        
+        paragraphs = text.split('\n\n')
+        chunks = []
+        current = []
+        current_wc = 0
+        
+        for para in paragraphs:
+            para_wc = len(para.split())
+            if current_wc + para_wc > max_words and current:
+                chunks.append('\n\n'.join(current))
+                current = [para]
+                current_wc = para_wc
+            else:
+                current.append(para)
+                current_wc += para_wc
+        
+        if current:
+            chunks.append('\n\n'.join(current))
+        
+        return chunks
     
     # =========================================================================
     # DOCX/ODT : Par Section

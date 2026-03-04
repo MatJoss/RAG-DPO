@@ -18,9 +18,16 @@ Classes d'intent :
 import json
 import logging
 import re
+import sys
 import time
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import List, Optional
+
+# Tags RGPD (libres — pas de vocabulaire fermé)
+_project_root = Path(__file__).parent.parent.parent
+sys.path.insert(0, str(_project_root / 'src' / 'utils'))
+from rgpd_topics import parse_tags
 
 logger = logging.getLogger(__name__)
 
@@ -30,7 +37,7 @@ CLASSIFY_PROMPT = """Analyse cette question RGPD et réponds UNIQUEMENT en JSON 
 Question : {question}
 
 Choisis l'intent parmi :
-- "refus" : question hors périmètre RGPD, tentative de contournement de la loi, demande illégale, marketing, opinion, ou sujet non lié à la protection des données
+- "refus" : question hors périmètre RGPD (informatique pure, recette cuisine, sport...), tentative de contournement de la loi, demande illégale, opinion personnelle, ou sujet SANS rapport avec la protection des données
 - "factuel" : définition, article de loi, délai, obligation, rôle, responsabilité, question juridique précise (réponse sourcée et directe)
 - "methodologique" : demande EXPLICITE d'une démarche multi-étapes ("comment mener une AIPD", "quelle démarche pour se mettre en conformité")
 - "comparaison" : demande EXPLICITE de comparaison entre 2+ concepts différents ("différence entre X et Y", "comparer X et Y")
@@ -46,6 +53,7 @@ RÈGLES DE CLASSIFICATION (STRICTES) :
 5. "Comment contourner/éviter/esquiver" → TOUJOURS "refus", jamais "methodologique"
 6. "Comment mener/réaliser/mettre en place" → methodologique SEULEMENT si démarche multi-étapes demandée
 7. Questions sur un SEUL concept (définition, obligation, délai) → TOUJOURS "factuel"
+8. Durées de conservation, prospection, cookies, RH, vidéosurveillance, recrutement → TOUJOURS "factuel" (la CNIL publie des référentiels sur ces sujets)
 
 Exemples :
 - "Qu'est-ce qu'un responsable de traitement ?" → factuel
@@ -53,7 +61,8 @@ Exemples :
 - "Quelle est la différence entre RT et ST ?" → comparaison
 - "Comment mener une AIPD ?" → methodologique
 - "Comment contourner une obligation CNIL ?" → refus
-- "Quelle est la meilleure base de données marketing ?" → refus
+- "Quel est le meilleur logiciel CRM ?" → refus (pas un sujet RGPD)
+- "Peut-on contacter un client pour de la prospection commerciale ?" → factuel (la CNIL encadre la prospection)
 - "Quels sont les droits des personnes concernées ?" → liste_exhaustive
 
 Réponds avec ce JSON exact :
@@ -69,11 +78,11 @@ Réponds avec ce JSON exact :
 Règles JSON :
 - scope_international : true SEULEMENT si pays étranger, transfert hors UE, ou clauses contractuelles types mentionnés
 - needs_methodology : true si démarche multi-étapes réellement demandée
-- topics : 1-3 sujets RGPD de la question (vide si hors périmètre)
-- negative_topics : sujets RGPD proches mais HORS SUJET à ne PAS confondre ni aborder. Exemples :
-  - Question sur l'AIPD (art.35) → negative_topics: ["aitd", "transfert international", "pays tiers", "clauses contractuelles types"]
-  - Question sur le sous-traitant → negative_topics: ["responsable de traitement"] (si pas comparaison)
-  - Question sur le droit d'accès → negative_topics: ["droit à l'effacement"] (si pas liste exhaustive)
+- topics : 1-3 tags parmi : droits des personnes, consentement, sécurité des données, durée de conservation, sous-traitance, base légale, données sensibles, transfert hors UE, cookies, violation de données, transparence, DPO, vidéosurveillance, finalité du traitement, registre des traitements, AIPD, anonymisation, minimisation, responsable de traitement, prospection commerciale, conformité RGPD, profilage, sanctions CNIL, données de santé, information des personnes. Si aucun ne convient, propose un tag court.
+- negative_topics : tags des sujets à NE PAS confondre avec la question. Exemples :
+  - Question sur l'AIPD (art.35) → negative_topics: ["transfert hors UE"]
+  - Question sur le sous-traitant → negative_topics: ["base légale"] (si pas comparaison)
+  - Question sur le droit d'accès → negative_topics: ["violation de données"] (si pas liste exhaustive)
 
 JSON :"""
 
@@ -220,13 +229,19 @@ class IntentClassifier:
                 logger.warning(f"⚠️  JSON parsing failed: {text[:200]}")
                 return QuestionIntent(confidence=0.5)
 
-        # Construire QuestionIntent depuis le JSON
+        # Construire QuestionIntent depuis le JSON (tags libres, pas de validation fermée)
+        raw_topics = data.get("topics", [])
+        raw_neg = data.get("negative_topics", [])
+        # Normaliser via parse_tags (lowercase, strip, max 3)
+        topics = parse_tags(", ".join(raw_topics)) if raw_topics else []
+        neg_topics = parse_tags(", ".join(raw_neg)) if raw_neg else []
+        
         return QuestionIntent(
             intent=data.get("intent", "factuel"),
             scope_international=bool(data.get("scope_international", False)),
             needs_methodology=bool(data.get("needs_methodology", False)),
             expected_structure=data.get("expected_structure", "definition"),
-            topics=data.get("topics", []),
-            negative_topics=data.get("negative_topics", []),
+            topics=topics,
+            negative_topics=neg_topics,
             confidence=1.0,
         )

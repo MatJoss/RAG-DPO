@@ -23,6 +23,12 @@ from .validators import RelevanceValidator, GroundingValidator
 from .reranker import CrossEncoderReranker, RankedChunk
 from .intent_classifier import IntentClassifier, QuestionIntent
 
+import sys
+from pathlib import Path
+_project_root = Path(__file__).parent.parent.parent
+sys.path.insert(0, str(_project_root / 'src' / 'utils'))
+from rgpd_topics import TopicMatcher
+
 logger = logging.getLogger(__name__)
 
 
@@ -143,6 +149,12 @@ class RAGPipeline:
         self.rerank_candidates = rerank_candidates
         self.rerank_top_k = rerank_top_k
         
+        # TopicMatcher : boost sémantique tags RGPD au reranking
+        embedding_provider = getattr(retriever, 'embedding_provider', None)
+        self.topic_matcher = TopicMatcher(embedding_provider) if embedding_provider else None
+        if self.topic_matcher:
+            logger.info("🏷️  TopicMatcher activé (boost sémantique RGPD au reranking)")
+        
         # Validators
         if enable_validation and llm_provider:
             self.relevance_validator = RelevanceValidator(llm_provider, threshold=0.80)
@@ -233,6 +245,8 @@ class RAGPipeline:
                     query=question,
                     chunks=raw_candidates,
                     top_k=self.rerank_top_k,
+                    topic_matcher=self.topic_matcher,
+                    question_topics=intent.topics if intent else None,
                 )
                 
                 # Reconstruire les documents à partir des chunks reranked
@@ -990,7 +1004,7 @@ def create_pipeline(
     max_context_length: int = 32000,  # ~8000 tokens, Nemo 128K
     model: str = "mistral-nemo",
     temperature: float = 0.0,  # Factuel strict par défaut
-    max_tokens: int = 2000,  # Assez long pour listes complètes
+    max_tokens: int = 3000,  # Marge large pour réponses denses (recommandations, obligations)
     debug_mode: bool = False,
     enable_validation: bool = True,  # Validation ON par défaut
     enable_hybrid: bool = True,      # Recherche hybride BM25+semantic

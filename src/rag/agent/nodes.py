@@ -452,7 +452,7 @@ def make_expert_refinement_node(components: NodeComponents):
                 ],
                 model=components.generator.model,
                 temperature=0.0,
-                max_tokens=2000,
+                max_tokens=3000,
             ).strip()
             refinement_time = time.time() - refinement_start
             

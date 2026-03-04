@@ -423,6 +423,29 @@ def _get_llm_judge():
     return _llm_judge_provider
 
 
+def _discretize_score(raw_score: int) -> int:
+    """
+    Discrétise un score libre 0-100 du LLM en paliers calibrés.
+    
+    Le LLM donne un score libre (plus naturel pour un 12B), 
+    on normalise côté code pour éviter le clustering sur des valeurs favorites.
+    
+    Paliers : 100 / 90 / 75 / 50 / 25 / 0
+    """
+    if raw_score >= 90:
+        return 100
+    elif raw_score >= 75:
+        return 90
+    elif raw_score >= 55:
+        return 75
+    elif raw_score >= 35:
+        return 50
+    elif raw_score >= 15:
+        return 25
+    else:
+        return 0
+
+
 def llm_judge_correctness(
     question: str,
     expected_answer: str,
@@ -431,10 +454,12 @@ def llm_judge_correctness(
     """
     Juge concept-aware optimisé pour Mistral-Nemo 12B.
     
-    Stratégie : jugement global avec paliers fixes (pas de chain-of-thought
-    détaillé qui rigidifie les modèles mid-size en mode diff-de-tokens).
+    Stratégie v6 : score LIBRE 0-100 par le LLM, discrétisation côté code.
+    Le LLM n'est plus contraint par des paliers fixes, ce qui évite le
+    clustering sur 85 et rend 100 accessible naturellement.
     
-    Paliers : 100 / 85 / 70 / 50 / 30 / 0
+    Un élément essentiel = un élément dont l'absence changerait
+    le sens juridique de la réponse.
     
     Returns:
         (score 0-1, justification)
@@ -464,16 +489,19 @@ RÈGLE 2 — erreur_factuelle :
 true = la réponse affirme quelque chose de FAUX (ex: "le DPO doit être avocat", "tous les organismes doivent nommer un DPO", "la CNIL réalise les AIPD")
 false = aucune affirmation fausse
 
-RÈGLE 3 — BARÈME :
-Si erreur_factuelle=true → score=0 (TOUJOURS)
-Si erreur_factuelle=false :
-  100 = la réponse couvre correctement les éléments essentiels sans erreur. Une légère imprécision ou une formulation incomplète n'empêche PAS le score 100.
-  85 = un détail secondaire manque
-  70 = plusieurs détails secondaires manquent
-  50 = un élément essentiel manque (ex: 3 bases sur 6 listées)
-  30 = la majorité des éléments essentiels manquent
+DÉFINITION : un élément essentiel est un élément dont l'absence changerait le sens juridique de la réponse.
 
-IMPORTANT : si tu hésites entre 100 et 85, privilégie 100.
+RÈGLE 3 — SCORE :
+Si erreur_factuelle=true → score=0 (TOUJOURS)
+Si erreur_factuelle=false → donne un score de 0 à 100 selon la couverture :
+  0 = aucun rapport avec la réponse attendue
+  ~30 = la majorité des éléments essentiels manquent
+  ~50 = un élément essentiel manque
+  ~70 = plusieurs détails secondaires manquent
+  ~85 = un détail secondaire manque
+  ~95-100 = la réponse couvre les éléments essentiels correctement
+
+Donne le score que tu estimes le plus juste. N'arrondis PAS aux paliers ci-dessus, ce sont des repères.
 
 Réponds en JSON :
 {{"erreur_factuelle": true/false, "score": 0-100, "justification": "..."}}"""
@@ -482,37 +510,76 @@ Réponds en JSON :
         response = provider.generate(
             prompt,
             temperature=0.0,
-            max_tokens=150,
+            max_tokens=300,  # 150 trop court → JSON tronqué "Unterminated string"
             format='json',
         )
         
         # Parser la réponse JSON
         import json as _json
+        import re as _re
         score = 0.0
         justification = "Parsing failed"
         
+        # Nettoyer la réponse : parfois le LLM ajoute du texte avant/après le JSON
+        raw_response = response.strip()
+        
+        # Tenter de réparer un JSON tronqué (justification coupée par max_tokens)
+        json_str = raw_response
         try:
-            data = _json.loads(response.strip())
-            raw_score = int(data.get("score", 0))
-            score = max(0.0, min(1.0, raw_score / 100.0))
-            justification = data.get("justification", "")
+            data = _json.loads(json_str)
+        except _json.JSONDecodeError:
+            # Tentative 1 : fermer une string tronquée + fermer l'objet
+            if '"justification"' in json_str and not json_str.rstrip().endswith('}'):
+                json_str_fixed = json_str.rstrip()
+                # Supprimer le dernier caractère incomplet si c'est au milieu d'un mot
+                if not json_str_fixed.endswith('"'):
+                    json_str_fixed += '"'
+                if not json_str_fixed.endswith('}'):
+                    json_str_fixed += '}'
+                try:
+                    data = _json.loads(json_str_fixed)
+                    logger.debug("JSON réparé (string tronquée fermée)")
+                except _json.JSONDecodeError:
+                    data = None
+            else:
+                data = None
             
-            # Garde-fou : si erreur_factuelle=true, forcer score = 0
-            if data.get("erreur_factuelle", False) and score > 0.30:
-                score = 0.0
-        except (_json.JSONDecodeError, ValueError, TypeError) as parse_err:
-            # Fallback: tenter parsing texte classique
-            logger.warning(f"⚠️  JSON parse failed, fallback texte: {parse_err}")
-            import re as _re
-            for line in response.strip().split("\n"):
-                line = line.strip()
-                if line.upper().startswith("SCORE") or '"score"' in line.lower():
-                    numbers = _re.findall(r'\d+', line)
-                    if numbers:
-                        raw_score = int(numbers[0])
-                        score = max(0.0, min(1.0, raw_score / 100.0))
-                elif line.upper().startswith("JUSTIFICATION") or '"justification"' in line.lower():
-                    justification = line.split(":", 1)[-1].strip().strip('",')
+            # Tentative 2 : extraction regex des champs
+            if data is None:
+                logger.warning(f"⚠️  JSON parse failed, extraction regex")
+                err_match = _re.search(r'"erreur_factuelle"\s*:\s*(true|false)', raw_response, _re.IGNORECASE)
+                score_match = _re.search(r'"score"\s*:\s*(\d+)', raw_response)
+                just_match = _re.search(r'"justification"\s*:\s*"([^"]*)', raw_response)
+                
+                if score_match:
+                    raw_score = int(score_match.group(1))
+                    erreur = err_match.group(1).lower() == "true" if err_match else False
+                    justification = just_match.group(1) if just_match else "extraction regex"
+                    
+                    if erreur:
+                        score = 0.0
+                    else:
+                        discretized = _discretize_score(raw_score)
+                        score = max(0.0, min(1.0, discretized / 100.0))
+                    
+                    logger.debug(f"Regex extraction: raw={raw_score}, erreur={erreur} → {score}")
+                    return score, justification
+                else:
+                    return 0.5, "JSON parse failed — score par défaut"
+        
+        # Parsing JSON réussi (direct ou réparé)
+        raw_score = int(data.get("score", 0))
+        justification = data.get("justification", "")
+        
+        # Garde-fou : si erreur_factuelle=true, forcer score = 0
+        if data.get("erreur_factuelle", False):
+            score = 0.0
+            logger.debug(f"Judge raw={raw_score} → erreur_factuelle=true → 0")
+        else:
+            # Discrétiser le score libre → paliers calibrés
+            discretized = _discretize_score(raw_score)
+            score = max(0.0, min(1.0, discretized / 100.0))
+            logger.debug(f"Judge raw={raw_score} → discretized={discretized} → {score}")
         
         return score, justification
         
@@ -572,31 +639,33 @@ def evaluate_single(qa_item: Dict, answer: str, sources: List[Dict] = None, use_
             actual_answer=answer,
         )
     
-    # Combiner les 3 signaux pour le score final de correctness
+    # Combiner les signaux pour le score final de correctness
     # LLM judge : compréhension sémantique profonde (meilleur signal)
     # Semantic Sim : proxy rapide et stable (pas de stochasticité LLM)
-    # Keyword : garde-fou binaire ("non" doit apparaître pour les pièges)
+    # Keyword : tracé uniquement, ne pèse plus dans le score
+    #   Raison : "5 ans" vs "cinq ans", refus correct sans mot-clé "sanction"
+    #   → le regex pénalise injustement des réponses sémantiquement correctes
     if llm_score >= 0 and sem_sim_score >= 0:
-        # Triple signal : LLM 50% + Semantic 35% + Keyword 15%
-        combined_correctness = 0.50 * llm_score + 0.35 * sem_sim_score + 0.15 * include_score
+        # Dual sémantique : LLM 60% + Semantic 40%
+        combined_correctness = 0.60 * llm_score + 0.40 * sem_sim_score
         result["answer_correctness"]["llm_judge_score"] = round(llm_score, 2)
         result["answer_correctness"]["llm_justification"] = llm_justification
-        result["answer_correctness"]["keyword_score"] = round(include_score, 2)
+        result["answer_correctness"]["keyword_score"] = round(include_score, 2)  # tracé uniquement
         result["answer_correctness"]["score"] = round(combined_correctness, 2)
     elif llm_score >= 0:
-        # LLM + keyword (pas de semantic)
-        combined_correctness = 0.70 * llm_score + 0.30 * include_score
+        # LLM seul (pas de semantic)
+        combined_correctness = llm_score
         result["answer_correctness"]["llm_judge_score"] = round(llm_score, 2)
         result["answer_correctness"]["llm_justification"] = llm_justification
-        result["answer_correctness"]["keyword_score"] = round(include_score, 2)
+        result["answer_correctness"]["keyword_score"] = round(include_score, 2)  # tracé uniquement
         result["answer_correctness"]["score"] = round(combined_correctness, 2)
     elif sem_sim_score >= 0:
-        # Semantic + keyword (pas de LLM)
+        # Semantic seul (pas de LLM) — keyword en fallback
         combined_correctness = 0.65 * sem_sim_score + 0.35 * include_score
         result["answer_correctness"]["keyword_score"] = round(include_score, 2)
         result["answer_correctness"]["score"] = round(combined_correctness, 2)
     else:
-        # Fallback keyword-only
+        # Fallback keyword-only (aucun signal sémantique)
         combined_correctness = include_score
         result["answer_correctness"]["llm_judge_score"] = None
         result["answer_correctness"]["llm_justification"] = llm_justification
@@ -920,11 +989,11 @@ def run_evaluation(
                 kw_score = r["answer_correctness"].get("keyword_score", r["answer_correctness"]["score"])
                 sem_score = r["answer_correctness"].get("semantic_similarity")
                 
-                # Triple signal si semantic dispo, sinon dual
+                # Dual sémantique si dispo, sinon LLM seul (keyword tracé uniquement)
                 if sem_score is not None and sem_score >= 0:
-                    combined = round(0.50 * llm_score + 0.35 * sem_score + 0.15 * kw_score, 2)
+                    combined = round(0.60 * llm_score + 0.40 * sem_score, 2)
                 else:
-                    combined = round(0.70 * llm_score + 0.30 * kw_score, 2)
+                    combined = round(llm_score, 2)
                 
                 r["answer_correctness"]["llm_judge_score"] = round(llm_score, 2)
                 r["answer_correctness"]["llm_justification"] = llm_justification
@@ -942,7 +1011,7 @@ def run_evaluation(
                 
                 icon = "🟢" if r["global_score"] >= 0.8 else "🟡" if r["global_score"] >= 0.5 else "🔴"
                 sem_disp = f" Sem={sem_score:.0%}" if sem_score is not None and sem_score >= 0 else ""
-                print(f"{icon} LLM={llm_score:.0%} KW={kw_score:.0%}{sem_disp} → {combined:.0%} (global={r['global_score']:.0%})")
+                print(f"{icon} LLM={llm_score:.0%}{sem_disp} → {combined:.0%} (global={r['global_score']:.0%}) [KW={kw_score:.0%} tracé]")
                 if verbose:
                     print(f"      📝 {llm_justification}")
             else:
@@ -950,9 +1019,11 @@ def run_evaluation(
         
         print()
     
-    # Nettoyer les champs internes
+    # Transférer _raw_answer → answer pour sauvegarde (auditabilité du judge)
     for r in results:
-        r.pop("_raw_answer", None)
+        raw = r.pop("_raw_answer", None)
+        if raw is not None:
+            r["answer"] = raw
     # Nettoyer les _intent injectés dans le dataset
     for q in dataset:
         q.pop("_intent", None)
@@ -992,6 +1063,17 @@ def run_evaluation(
             icon = "🟢" if cat_avg >= 0.8 else "🟡" if cat_avg >= 0.5 else "🔴"
             print(f"    {icon} {cat:20s} : {cat_avg:.0%} ({len(cat_results)} questions)")
         
+        # Score pondéré par catégorie (moyenne des moyennes de catégories)
+        cat_averages = {}
+        weighted_by_category = 0.0
+        for cat in sorted(categories):
+            cat_results_list = [r for r in valid_results if r["category"] == cat]
+            cat_averages[cat] = sum(r["global_score"] for r in cat_results_list) / len(cat_results_list)
+        if cat_averages:
+            weighted_by_category = sum(cat_averages.values()) / len(cat_averages)
+            print(f"\n  🎯 Score pondéré par catégorie : {weighted_by_category:.0%}")
+            print(f"     (moyenne des moyennes — chaque catégorie pèse autant)")
+        
         # Top 3 pires
         sorted_results = sorted(valid_results, key=lambda r: r["global_score"])
         print(f"\n  🔴 Points faibles (3 pires) :")
@@ -1002,6 +1084,36 @@ def run_evaluation(
         print(f"\n  🟢 Points forts (3 meilleurs) :")
         for r in sorted_results[-3:]:
             print(f"    • {r['id']:35s} : {r['global_score']:.0%} — {r['question'][:60]}")
+        
+        # Corpus gap analysis — identifier les questions où le RAG manque de contenu
+        # Exclure hors_perimetre et piège : pas de source = comportement attendu
+        corpus_gap_threshold = 0.75
+        expected_no_source_cats = {"hors_perimetre", "piège", "piege"}
+        weak_questions = [r for r in valid_results if r["global_score"] < corpus_gap_threshold]
+        if weak_questions:
+            print(f"\n  🔍 Corpus Gap Analysis (questions < {corpus_gap_threshold:.0%}) :")
+            for r in sorted(weak_questions, key=lambda x: x["global_score"]):
+                cat = r.get("category", "")
+                llm_s = r.get("answer_correctness", {}).get("llm_judge_score", "?")
+                kw_s = r.get("answer_correctness", {}).get("keyword_score", "?")
+                sem_s = r.get("answer_correctness", {}).get("semantic_similarity", "?")
+                missing_kw = r.get("answer_correctness", {}).get("missing", [])
+                src_count = r.get("source_quality", {}).get("count", 0)
+                diag = []
+                if isinstance(llm_s, (int, float)) and llm_s < 0.5:
+                    diag.append("LLM juge réponse insuffisante")
+                if isinstance(kw_s, (int, float)) and kw_s < 0.5:
+                    diag.append(f"mots-clés manquants: {missing_kw[:3]}")
+                if isinstance(sem_s, (int, float)) and sem_s < 0.5:
+                    diag.append("faible similarité sémantique")
+                if src_count == 0 and cat not in expected_no_source_cats:
+                    diag.append("aucune source trouvée")
+                if cat in expected_no_source_cats:
+                    diag.append(f"[{cat}] score bas attendu")
+                diag_str = " | ".join(diag) if diag else "vérifier corpus"
+                qid_short = r['id'][:35]
+                score_pct = r['global_score']
+                print(f"    • {qid_short:35s} {score_pct:.0%} → {diag_str}")
     
     if results:
         errors = [r for r in results if "error" in r]
@@ -1026,10 +1138,12 @@ def run_evaluation(
             "n_valid": len(valid_results),
             "n_errors": len(results) - len(valid_results),
             "avg_global_score": round(avg_global, 3) if valid_results else 0,
+            "avg_global_score_by_category": round(weighted_by_category, 3) if cat_averages else 0,
             "avg_time_per_question": round(avg_time, 1) if valid_results else 0,
-            "scoring_version": "v4_no_conciseness",
+            "scoring_version": "v6_free_score_discretized",
             "scoring_weights": {"correctness": 0.55, "faithfulness": 0.25, "conciseness": 0.00, "sources": 0.20},
-            "correctness_formula": "0.50*llm_judge + 0.35*semantic_sim + 0.15*keyword",
+            "correctness_formula": "0.60*llm_judge + 0.40*semantic_sim (keyword traced only)",
+            "judge_mode": "free 0-100 → discretized (100/90/75/50/25/0)",
             "conciseness_mode": "disabled (traced only)",
             "results": results,
         }, f, ensure_ascii=False, indent=2)
@@ -1135,6 +1249,8 @@ def run_multi_evaluation(
             s["llm_judge"].append(r.get("answer_correctness", {}).get("llm_judge_score", 0))
             s["semantic_sim"].append(r.get("answer_correctness", {}).get("semantic_similarity", 0))
             s["keyword"].append(r.get("answer_correctness", {}).get("keyword_score", 0))
+            if r.get("answer"):
+                s.setdefault("answers", []).append(r["answer"])
     
     # Scores globaux agrégés
     all_globals = [r.get("avg_global", 0) for r in all_runs]
@@ -1150,6 +1266,23 @@ def run_multi_evaluation(
     print(f"{'='*70}\n")
     
     print(f"  📈 Score Global : {mean_global:.1%} ± {std_global:.1%}")
+    
+    # Score pondéré par catégorie (chaque catégorie pèse autant)
+    cat_means_multi = {}
+    for qid, s in qid_scores.items():
+        cat = s["category"]
+        if cat not in cat_means_multi:
+            cat_means_multi[cat] = []
+        cat_means_multi[cat].append(statistics.mean(s["global"]))
+    if cat_means_multi:
+        cat_avgs_multi = {c: statistics.mean(scores) for c, scores in cat_means_multi.items()}
+        weighted_by_cat = sum(cat_avgs_multi.values()) / len(cat_avgs_multi)
+        print(f"  🎯 Score pondéré/catégorie : {weighted_by_cat:.1%}")
+        for cat in sorted(cat_avgs_multi.keys()):
+            n = len(cat_means_multi[cat])
+            icon = "🟢" if cat_avgs_multi[cat] >= 0.8 else "🟡" if cat_avgs_multi[cat] >= 0.5 else "🔴"
+            print(f"     {icon} {cat:20s} : {cat_avgs_multi[cat]:.0%} ({n}q)")
+    
     print(f"  ⏱️  Temps total  : {total_elapsed:.0f}s ({total_elapsed/60:.1f} min)")
     print(f"  🔁 Runs         : {', '.join(f'{g:.1%}' for g in all_globals)}")
     
@@ -1238,6 +1371,9 @@ def run_multi_evaluation(
             "keyword":       {"mean": round(statistics.mean(s["keyword"]), 3), "std": round(statistics.stdev(s["keyword"]), 3) if len(s["keyword"]) >= 2 else 0, "runs": [round(x, 3) for x in s["keyword"]]},
             "answer_length_words": {"mean": round(statistics.mean(s["words"]), 0), "std": round(statistics.stdev(s["words"]), 0) if len(s["words"]) >= 2 else 0, "runs": [int(x) for x in s["words"]]},
         }
+        # Ajouter les réponses RAG brutes pour auditabilité
+        if s.get("answers"):
+            entry["answers"] = s["answers"]
         aggregated_results.append(entry)
     
     with open(output_path, "w", encoding="utf-8") as f:
@@ -1249,8 +1385,10 @@ def run_multi_evaluation(
             "embedding_mode": embedding_mode,
             "generation_mode": "single" if not enable_dual_gen else "dual",
             "pipeline_mode": "agent" if use_agent else "native",
-            "scoring_version": "v4_no_conciseness",
+            "scoring_version": "v6_free_score_discretized",
             "global_score": {"mean": round(mean_global, 3), "std": round(std_global, 3), "runs": [round(x, 3) for x in all_globals]},
+            "global_score_by_category": {cat: round(avg, 3) for cat, avg in cat_avgs_multi.items()} if cat_means_multi else {},
+            "global_score_weighted_by_category": round(weighted_by_cat, 3) if cat_means_multi else 0,
             "variance_analysis": {
                 "avg_spread_per_question": round(avg_spread, 3),
                 "max_spread": round(max_spread, 3),

@@ -268,6 +268,11 @@ Exemples :
             py, str(PROJECT_ROOT / "src" / "processing" / "generate_document_summaries.py"),
         ]))
 
+        # Phase 6d : Tagging RGPD des nouveaux chunks (idempotent, skip déjà taggés)
+        steps.append(("8b. Tagging RGPD des chunks", [
+            py, str(PROJECT_ROOT / "tag_all_chunks.py"),
+        ]))
+
         # Phase 6c : Nettoyage post-résumés
         steps.append(("9. Nettoyage post-résumés", [
             py, str(PROJECT_ROOT / "src" / "processing" / "phase_6c_cleanup.py"),

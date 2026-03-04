@@ -1,0 +1,739 @@
+{
+  "timestamp": "2026-03-02T17:08:20.052898",
+  "embedding_model": "BGE-M3",
+  "embedding_mode": "bge-m3",
+  "generation_mode": "single",
+  "pipeline_mode": "agent",
+  "n_questions": 18,
+  "n_valid": 18,
+  "n_errors": 0,
+  "avg_global_score": 0.848,
+  "avg_time_per_question": 19.4,
+  "scoring_version": "v4_no_conciseness",
+  "scoring_weights": {
+    "correctness": 0.55,
+    "faithfulness": 0.25,
+    "conciseness": 0.0,
+    "sources": 0.2
+  },
+  "correctness_formula": "0.50*llm_judge + 0.35*semantic_sim + 0.15*keyword",
+  "conciseness_mode": "disabled (traced only)",
+  "results": [
+    {
+      "id": "q01_donnee_personnelle",
+      "question": "Qu'est-ce qu'une donnée personnelle selon le RGPD ?",
+      "category": "definition",
+      "difficulty": "facile",
+      "answer_correctness": {
+        "score": 0.92,
+        "found": [
+          "personne physique",
+          "identifiée ou identifiable"
+        ],
+        "missing": [],
+        "semantic_similarity": 0.783,
+        "keyword_score": 1.0,
+        "llm_judge_score": 1.0,
+        "llm_justification": "La réponse fournie est conforme à la définition de données personnelles selon le RGPD. Elle mentionne que ces données peuvent être identifiées directement ou indirectement et qu'une personne peut être identifiée à partir d'une seule donnée ou du croisement d'un ensemble de données."
+      },
+      "faithfulness": {
+        "score": 1.0,
+        "violations": []
+      },
+      "conciseness": {
+        "score": 1.0,
+        "assessment": "✅ 62 mots (idéal ≤150)",
+        "intent_used": "factuel"
+      },
+      "source_quality": {
+        "score": 1.0,
+        "n_citations": 3,
+        "n_unique_sources": 2,
+        "source_ids": [
+          "1",
+          "4"
+        ]
+      },
+      "global_score": 0.96,
+      "elapsed_seconds": 25.8,
+      "answer_length_words": 62
+    },
+    {
+      "id": "q02_responsable_traitement",
+      "question": "Qui est responsable de traitement ?",
+      "category": "definition",
+      "difficulty": "facile",
+      "answer_correctness": {
+        "score": 0.85,
+        "found": [
+          "finalités",
+          "moyens",
+          "traitement"
+        ],
+        "missing": [],
+        "semantic_similarity": 0.781,
+        "keyword_score": 1.0,
+        "llm_judge_score": 0.85,
+        "llm_justification": "La réponse fournie est globalement correcte et complète. Elle contient toutes les informations essentielles pour définir le responsable de traitement. Cependant, elle mentionne des sources qui ne sont pas fournies, ce qui pourrait rendre difficile la vérification de l'exactitude des informations."
+      },
+      "faithfulness": {
+        "score": 1.0,
+        "violations": []
+      },
+      "conciseness": {
+        "score": 0.9148000000000001,
+        "assessment": "⚠️ 221 mots (idéal ≤150, max 400)",
+        "intent_used": "factuel"
+      },
+      "source_quality": {
+        "score": 1.0,
+        "n_citations": 8,
+        "n_unique_sources": 4,
+        "source_ids": [
+          "1",
+          "3",
+          "5",
+          "6"
+        ]
+      },
+      "global_score": 0.92,
+      "elapsed_seconds": 22.3,
+      "answer_length_words": 221
+    },
+    {
+      "id": "q03_rt_vs_st",
+      "question": "Quelle est la différence entre responsable de traitement et sous-traitant ?",
+      "category": "definition",
+      "difficulty": "moyen",
+      "answer_correctness": {
+        "score": 0.82,
+        "found": [
+          "finalités",
+          "moyens",
+          "pour le compte",
+          "instructions"
+        ],
+        "missing": [],
+        "semantic_similarity": 0.701,
+        "keyword_score": 1.0,
+        "llm_judge_score": 0.85,
+        "llm_justification": "La réponse fournie est globalement correcte et fournit une distinction claire entre le responsable de traitement et le sous-traitant. Cependant, elle manque un détail secondaire : la mention que le sous-traitant doit agir sur instructions documentées du responsable de traitement."
+      },
+      "faithfulness": {
+        "score": 1.0,
+        "violations": []
+      },
+      "conciseness": {
+        "score": 0.8153846153846154,
+        "assessment": "⚠️ 395 mots (idéal ≤195, max 520)",
+        "intent_used": "comparaison"
+      },
+      "source_quality": {
+        "score": 1.0,
+        "n_citations": 4,
+        "n_unique_sources": 4,
+        "source_ids": [
+          "1",
+          "2",
+          "3",
+          "4"
+        ]
+      },
+      "global_score": 0.9,
+      "elapsed_seconds": 24.3,
+      "answer_length_words": 395
+    },
+    {
+      "id": "q04_aipd_obligatoire",
+      "question": "Quand une AIPD (DPIA) est-elle obligatoire ?",
+      "category": "obligation",
+      "difficulty": "moyen",
+      "answer_correctness": {
+        "score": 0.8,
+        "found": [
+          "risque élevé",
+          "droits et libertés"
+        ],
+        "missing": [
+          "grande échelle"
+        ],
+        "semantic_similarity": 0.791,
+        "keyword_score": 0.67,
+        "llm_judge_score": 0.85,
+        "llm_justification": "La réponse fournie est globalement correcte mais elle inclut des critères supplémentaires qui ne sont pas explicitement mentionnés dans le RGPD. Elle fait également référence à une source spécifique (la CNIL) pour les types d'opérations de traitement pour lesquelles une AIPD est requise, alors que la question demande une réponse basée sur le RGPD."
+      },
+      "faithfulness": {
+        "score": 1.0,
+        "violations": []
+      },
+      "conciseness": {
+        "score": 1.0,
+        "assessment": "✅ 105 mots (idéal ≤200)",
+        "intent_used": "factuel"
+      },
+      "source_quality": {
+        "score": 1.0,
+        "n_citations": 3,
+        "n_unique_sources": 2,
+        "source_ids": [
+          "1",
+          "3"
+        ]
+      },
+      "global_score": 0.89,
+      "elapsed_seconds": 14.3,
+      "answer_length_words": 105
+    },
+    {
+      "id": "q05_criteres_aipd_cnil",
+      "question": "Quels sont les critères du G29 qui déclenchent une AIPD selon la CNIL ?",
+      "category": "recommandation",
+      "difficulty": "difficile",
+      "answer_correctness": {
+        "score": 0.79,
+        "found": [
+          "critères|critère",
+          "[any:données sensibles]",
+          "[any:grande échelle]",
+          "[any:croisement de données|croisement|combinaison]",
+          "[any:personnes vulnérables|vulnérables]",
+          "[any:usage innovant|innovant|technologie innovante]"
+        ],
+        "missing": [],
+        "semantic_similarity": 0.828,
+        "keyword_score": 1.0,
+        "llm_judge_score": 0.7,
+        "llm_justification": "La réponse fournie manque deux critères essentiels : l'évaluation/scoring et la décision automatique avec effet juridique. Elle inclut également un critère absent de la réponse attendue ('Exclusion du bénéfice d’un droit/contrat')."
+      },
+      "faithfulness": {
+        "score": 1.0,
+        "violations": []
+      },
+      "conciseness": {
+        "score": 1.0,
+        "assessment": "✅ 46 mots (idéal ≤200)",
+        "intent_used": "factuel"
+      },
+      "source_quality": {
+        "score": 1.0,
+        "n_citations": 1,
+        "n_unique_sources": 1,
+        "source_ids": [
+          "1"
+        ]
+      },
+      "global_score": 0.88,
+      "elapsed_seconds": 14.3,
+      "answer_length_words": 46
+    },
+    {
+      "id": "q06_liste_aipd_cnil",
+      "question": "La CNIL met-elle à disposition une liste de traitements nécessitant une AIPD ?",
+      "category": "recommandation",
+      "difficulty": "moyen",
+      "answer_correctness": {
+        "score": 0.86,
+        "found": [
+          "oui|liste",
+          "[any:obligatoire|obligation]",
+          "[any:2018|2019]"
+        ],
+        "missing": [],
+        "semantic_similarity": 0.81,
+        "keyword_score": 1.0,
+        "llm_judge_score": 0.85,
+        "llm_justification": "La réponse fournie mentionne la liste noire publiée le 11 octobre 2018, mais ne précise pas que cette liste a été adoptée en novembre 2018. Elle fournit également des informations supplémentaires sur l'infographie pratique et le logiciel open source de la CNIL pour faciliter la conduite et la formalisation de l'analyse d'impact, ce qui n'est pas demandé dans la réponse attendue."
+      },
+      "faithfulness": {
+        "score": 1.0,
+        "violations": []
+      },
+      "conciseness": {
+        "score": 1.0,
+        "assessment": "✅ 145 mots (idéal ≤200)",
+        "intent_used": "factuel"
+      },
+      "source_quality": {
+        "score": 1.0,
+        "n_citations": 4,
+        "n_unique_sources": 2,
+        "source_ids": [
+          "2",
+          "3"
+        ]
+      },
+      "global_score": 0.92,
+      "elapsed_seconds": 16.3,
+      "answer_length_words": 145
+    },
+    {
+      "id": "q07_obligations_rt",
+      "question": "Quelles sont les principales obligations d'un responsable de traitement ?",
+      "category": "obligation",
+      "difficulty": "moyen",
+      "answer_correctness": {
+        "score": 0.85,
+        "found": [
+          "registre",
+          "sécurité",
+          "information",
+          "droits",
+          "violation"
+        ],
+        "missing": [],
+        "semantic_similarity": 0.783,
+        "keyword_score": 1.0,
+        "llm_judge_score": 0.85,
+        "llm_justification": "La réponse fournie est globalement correcte et couvre la plupart des principales obligations d'un responsable de traitement. Cependant, elle manque un détail secondaire : l'obligation de contractualiser sous-traitants n'est pas mentionnée explicitement."
+      },
+      "faithfulness": {
+        "score": 1.0,
+        "violations": []
+      },
+      "conciseness": {
+        "score": 1.0,
+        "assessment": "✅ 126 mots (idéal ≤200)",
+        "intent_used": "factuel"
+      },
+      "source_quality": {
+        "score": 1.0,
+        "n_citations": 7,
+        "n_unique_sources": 3,
+        "source_ids": [
+          "1",
+          "2",
+          "3"
+        ]
+      },
+      "global_score": 0.92,
+      "elapsed_seconds": 15.1,
+      "answer_length_words": 126
+    },
+    {
+      "id": "q08_droits_personnes",
+      "question": "Quels sont les droits des personnes concernées et leurs limites ?",
+      "category": "definition",
+      "difficulty": "moyen",
+      "answer_correctness": {
+        "score": 0.81,
+        "found": [
+          "droits|droit",
+          "[any:accès]",
+          "[any:rectification]",
+          "[any:effacement|suppression]",
+          "[any:opposition|s'opposer]",
+          "[any:portabilité]",
+          "[any:limitation|limiter]",
+          "[any:information|être informé]"
+        ],
+        "missing": [],
+        "semantic_similarity": 0.673,
+        "keyword_score": 1.0,
+        "llm_judge_score": 0.85,
+        "llm_justification": "La réponse fournie est globalement correcte et couvre la plupart des droits des personnes concernées tels que définis par le RGPD. Cependant, elle manque une limite importante : l'exercice abusif du droit d'accès peut être limité ou soumis à conditions en fonction du contexte et de la base légale du traitement."
+      },
+      "faithfulness": {
+        "score": 1.0,
+        "violations": []
+      },
+      "conciseness": {
+        "score": 0.8408,
+        "assessment": "⚠️ 424 mots (idéal ≤225, max 600)",
+        "intent_used": "liste_exhaustive"
+      },
+      "source_quality": {
+        "score": 1.0,
+        "n_citations": 14,
+        "n_unique_sources": 5,
+        "source_ids": [
+          "1",
+          "3",
+          "5",
+          "7",
+          "9"
+        ]
+      },
+      "global_score": 0.9,
+      "elapsed_seconds": 23.0,
+      "answer_length_words": 424
+    },
+    {
+      "id": "q09_conservation_cv",
+      "question": "Une entreprise peut-elle conserver des CV indéfiniment ?",
+      "category": "recommandation",
+      "difficulty": "moyen",
+      "answer_correctness": {
+        "score": 0.68,
+        "found": [],
+        "missing": [
+          "2 ans",
+          "dernier contact"
+        ],
+        "semantic_similarity": 0.721,
+        "keyword_score": 0.0,
+        "llm_judge_score": 0.85,
+        "llm_justification": "La réponse fournie est globalement correcte mais elle ne mentionne pas la durée maximale de conservation recommandée par la CNIL (2 ans après le dernier contact avec le candidat). Elle évoque une 'durée nécessaire' sans précision, ce qui pourrait être interprété comme une durée plus longue que 2 ans."
+      },
+      "faithfulness": {
+        "score": 1.0,
+        "violations": []
+      },
+      "conciseness": {
+        "score": 1.0,
+        "assessment": "✅ 65 mots (idéal ≤200)",
+        "intent_used": "factuel"
+      },
+      "source_quality": {
+        "score": 1.0,
+        "n_citations": 3,
+        "n_unique_sources": 2,
+        "source_ids": [
+          "1",
+          "2"
+        ]
+      },
+      "global_score": 0.82,
+      "elapsed_seconds": 13.1,
+      "answer_length_words": 65
+    },
+    {
+      "id": "q10_interet_legitime_videosurveillance",
+      "question": "Peut-on utiliser l'intérêt légitime pour la vidéosurveillance ?",
+      "category": "recommandation",
+      "difficulty": "moyen",
+      "answer_correctness": {
+        "score": 0.81,
+        "found": [
+          "intérêt légitime",
+          "mise en balance|condition|pondération|sous réserve"
+        ],
+        "missing": [
+          "sécurité|protection|biens"
+        ],
+        "semantic_similarity": 0.813,
+        "keyword_score": 0.67,
+        "llm_judge_score": 0.85,
+        "llm_justification": "La réponse fournie est globalement correcte et couvre la plupart des éléments essentiels. Cependant, elle ne mentionne pas explicitement que l'intérêt légitime doit être mis en balance avec les droits des personnes concernées, ni qu'il y a une durée de conservation maximale de 30 jours pour les images enregistrées."
+      },
+      "faithfulness": {
+        "score": 1.0,
+        "violations": []
+      },
+      "conciseness": {
+        "score": 1.0,
+        "assessment": "✅ 105 mots (idéal ≤200)",
+        "intent_used": "factuel"
+      },
+      "source_quality": {
+        "score": 1.0,
+        "n_citations": 4,
+        "n_unique_sources": 4,
+        "source_ids": [
+          "10",
+          "2",
+          "3",
+          "6"
+        ]
+      },
+      "global_score": 0.9,
+      "elapsed_seconds": 14.9,
+      "answer_length_words": 105
+    },
+    {
+      "id": "q11_opposition_traitement_rh",
+      "question": "Un salarié peut-il s'opposer à un traitement RH ?",
+      "category": "recommandation",
+      "difficulty": "difficile",
+      "answer_correctness": {
+        "score": 0.62,
+        "found": [
+          "[any:contrat de travail|contrat|exécution du contrat]"
+        ],
+        "missing": [
+          "base légale|obligation légale|fondé sur",
+          "[any: 1/2 trouvés, besoin 2]"
+        ],
+        "semantic_similarity": 0.673,
+        "keyword_score": 0.25,
+        "llm_judge_score": 0.7,
+        "llm_justification": "La réponse fournie aborde le sujet de l'opposition d'un salarié à une désignation en tant que DPO, mais ne couvre pas tous les aspects du droit d'opposition en matière de traitement RH. Elle ne mentionne pas explicitement si le salarié peut s'opposer pour motif lié à sa situation particulière ou si le droit d'opposition est limité selon la base légale du traitement."
+      },
+      "faithfulness": {
+        "score": 1.0,
+        "violations": []
+      },
+      "conciseness": {
+        "score": 1.0,
+        "assessment": "✅ 88 mots (idéal ≤200)",
+        "intent_used": "factuel"
+      },
+      "source_quality": {
+        "score": 1.0,
+        "n_citations": 2,
+        "n_unique_sources": 1,
+        "source_ids": [
+          "1"
+        ]
+      },
+      "global_score": 0.79,
+      "elapsed_seconds": 43.1,
+      "answer_length_words": 88
+    },
+    {
+      "id": "q12_conservation_50_ans",
+      "question": "La CNIL autorise-t-elle la conservation des données clients pendant 50 ans ?",
+      "category": "piège",
+      "difficulty": "facile",
+      "answer_correctness": {
+        "score": 0.39,
+        "found": [
+          "non"
+        ],
+        "missing": [],
+        "semantic_similarity": 0.692,
+        "keyword_score": 1.0,
+        "llm_judge_score": 0.0,
+        "llm_justification": "La réponse fournie ne mentionne pas explicitement que la CNIL n'autorise pas une telle durée de conservation. Elle se concentre plutôt sur l'absence d'informations spécifiques concernant un délai de 50 ans autorisé par la CNIL. Cependant, elle ne contredit pas non plus cette affirmation. La réponse attendue fournit des informations supplémentaires sur les recommandations de la CNIL pour la durée de conservation des données à des fins de prospection commerciale."
+      },
+      "faithfulness": {
+        "score": 0.0,
+        "violations": [
+          "50 ans autorisé"
+        ]
+      },
+      "conciseness": {
+        "score": 1.0,
+        "assessment": "✅ 25 mots (idéal ≤80)",
+        "intent_used": "factuel"
+      },
+      "source_quality": {
+        "score": 1.0,
+        "n_citations": 0,
+        "n_unique_sources": 0,
+        "source_ids": []
+      },
+      "global_score": 0.41,
+      "elapsed_seconds": 13.6,
+      "answer_length_words": 25
+    },
+    {
+      "id": "q13_dpo_obligatoire",
+      "question": "Le RGPD impose-t-il un DPO dans toutes les entreprises ?",
+      "category": "obligation",
+      "difficulty": "facile",
+      "answer_correctness": {
+        "score": 0.85,
+        "found": [
+          "non",
+          "obligatoire"
+        ],
+        "missing": [],
+        "semantic_similarity": 0.796,
+        "keyword_score": 1.0,
+        "llm_judge_score": 0.85,
+        "llm_justification": "La réponse fournie est globalement correcte. Elle mentionne les cas où la désignation d'un DPO est obligatoire selon le RGPD et précise que dans les autres cas, la CNIL encourage sa désignation mais ne l'impose pas. Cependant, elle omet de mentionner que la désignation d'un DPO est également obligatoire pour les autorités/organismes publics."
+      },
+      "faithfulness": {
+        "score": 1.0,
+        "violations": []
+      },
+      "conciseness": {
+        "score": 1.0,
+        "assessment": "✅ 62 mots (idéal ≤200)",
+        "intent_used": "factuel"
+      },
+      "source_quality": {
+        "score": 1.0,
+        "n_citations": 1,
+        "n_unique_sources": 1,
+        "source_ids": [
+          "1"
+        ]
+      },
+      "global_score": 0.92,
+      "elapsed_seconds": 14.6,
+      "answer_length_words": 62
+    },
+    {
+      "id": "q14_article_99_ia",
+      "question": "Existe-t-il un article 99 du RGPD sur l'IA ?",
+      "category": "piège",
+      "difficulty": "facile",
+      "answer_correctness": {
+        "score": 0.59,
+        "found": [
+          "non"
+        ],
+        "missing": [],
+        "semantic_similarity": 0.541,
+        "keyword_score": 1.0,
+        "llm_judge_score": 0.5,
+        "llm_justification": "La réponse fournie ne répond pas directement à la question posée sur l'existence d'un article spécifique du RGPD concernant l'IA. Elle indique simplement que cette question n'est pas couverte par ses sources, sans fournir d'informations supplémentaires."
+      },
+      "faithfulness": {
+        "score": 1.0,
+        "violations": []
+      },
+      "conciseness": {
+        "score": 1.0,
+        "assessment": "✅ 12 mots (idéal ≤24)",
+        "intent_used": "refus"
+      },
+      "source_quality": {
+        "score": 1.0,
+        "n_citations": 0,
+        "n_unique_sources": 0,
+        "source_ids": []
+      },
+      "global_score": 0.77,
+      "elapsed_seconds": 12.7,
+      "answer_length_words": 12
+    },
+    {
+      "id": "q15_etude_impact",
+      "question": "Quand doit-on faire une étude d'impact vie privée ?",
+      "category": "obligation",
+      "difficulty": "moyen",
+      "answer_correctness": {
+        "score": 0.81,
+        "found": [
+          "risque élevé",
+          "avant la mise en œuvre"
+        ],
+        "missing": [],
+        "semantic_similarity": 0.662,
+        "keyword_score": 1.0,
+        "llm_judge_score": 0.85,
+        "llm_justification": "La réponse fournie est globalement correcte. Elle mentionne que l'étude d'impact doit être réalisée avant la mise en œuvre du traitement et révisée régulièrement, ainsi que les critères pour déterminer si une étude est obligatoire ou non. Cependant, elle ne cite pas explicitement les neuf critères définis par les lignes directrices du G29, bien qu'elle fasse référence à ces critères de manière générale."
+      },
+      "faithfulness": {
+        "score": 1.0,
+        "violations": []
+      },
+      "conciseness": {
+        "score": 1.0,
+        "assessment": "✅ 169 mots (idéal ≤200)",
+        "intent_used": "factuel"
+      },
+      "source_quality": {
+        "score": 1.0,
+        "n_citations": 4,
+        "n_unique_sources": 2,
+        "source_ids": [
+          "1",
+          "3"
+        ]
+      },
+      "global_score": 0.9,
+      "elapsed_seconds": 16.1,
+      "answer_length_words": 169
+    },
+    {
+      "id": "q16_qui_decide_moyens",
+      "question": "Qui décide des moyens du traitement ?",
+      "category": "definition",
+      "difficulty": "facile",
+      "answer_correctness": {
+        "score": 0.93,
+        "found": [
+          "responsable de traitement"
+        ],
+        "missing": [],
+        "semantic_similarity": 0.796,
+        "keyword_score": 1.0,
+        "llm_judge_score": 1.0,
+        "llm_justification": "La réponse fournie est correcte et complète. Elle mentionne que le responsable de traitement décide des moyens essentiels du traitement, ce qui correspond à la réponse attendue. La réponse fournit également une précision sur les cas où un sous-traitant peut être considéré comme un responsable de traitement, mais cela n'affecte pas la pertinence de la réponse par rapport à la question posée."
+      },
+      "faithfulness": {
+        "score": 1.0,
+        "violations": []
+      },
+      "conciseness": {
+        "score": 1.0,
+        "assessment": "✅ 90 mots (idéal ≤150)",
+        "intent_used": "factuel"
+      },
+      "source_quality": {
+        "score": 1.0,
+        "n_citations": 3,
+        "n_unique_sources": 2,
+        "source_ids": [
+          "1",
+          "2"
+        ]
+      },
+      "global_score": 0.96,
+      "elapsed_seconds": 43.6,
+      "answer_length_words": 90
+    },
+    {
+      "id": "q17_base_donnees_marketing",
+      "question": "Quelle est la meilleure base de données marketing en 2024 ?",
+      "category": "hors_perimetre",
+      "difficulty": "facile",
+      "answer_correctness": {
+        "score": 0.67,
+        "found": [],
+        "missing": [],
+        "semantic_similarity": 0.764,
+        "keyword_score": 1.0,
+        "llm_judge_score": 0.5,
+        "llm_justification": "La réponse fournie indique clairement que la question ne relève pas du périmètre RGPD/CNIL couvert par ses sources. Cependant, elle pourrait être améliorée en mentionnant explicitement que ce sujet n'est pas couvert par les sources CNIL."
+      },
+      "faithfulness": {
+        "score": 1.0,
+        "violations": []
+      },
+      "conciseness": {
+        "score": 1.0,
+        "assessment": "✅ 12 mots (idéal ≤15)",
+        "intent_used": "refus"
+      },
+      "source_quality": {
+        "score": 1.0,
+        "n_citations": 0,
+        "n_unique_sources": 0,
+        "source_ids": []
+      },
+      "global_score": 0.82,
+      "elapsed_seconds": 11.5,
+      "answer_length_words": 12
+    },
+    {
+      "id": "q18_contourner_cnil",
+      "question": "Comment contourner une obligation CNIL ?",
+      "category": "hors_perimetre",
+      "difficulty": "facile",
+      "answer_correctness": {
+        "score": 0.44,
+        "found": [],
+        "missing": [
+          "pas possible",
+          "sanction"
+        ],
+        "semantic_similarity": 0.55,
+        "keyword_score": 0.0,
+        "llm_judge_score": 0.5,
+        "llm_justification": "La réponse fournie ne couvre pas le sujet de la question posée. Elle indique que cela ne relève pas du périmètre CNIL/RGPD couvert par ses sources, alors qu'il s'agit d'une obligation légale relevant directement du RGPD et de la CNIL."
+      },
+      "faithfulness": {
+        "score": 1.0,
+        "violations": []
+      },
+      "conciseness": {
+        "score": 1.0,
+        "assessment": "✅ 12 mots (idéal ≤15)",
+        "intent_used": "refus"
+      },
+      "source_quality": {
+        "score": 1.0,
+        "n_citations": 0,
+        "n_unique_sources": 0,
+        "source_ids": []
+      },
+      "global_score": 0.69,
+      "elapsed_seconds": 11.4,
+      "answer_length_words": 12
+    }
+  ]
+}

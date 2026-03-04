@@ -10,8 +10,15 @@ Modèle par défaut : jinaai/jina-reranker-v2-base-multilingual (278M params)
 Prend une query + une liste de chunks candidats, retourne les chunks réordonnés par pertinence.
 """
 import logging
+import sys
+from pathlib import Path
 from typing import List, Tuple, Optional
 from dataclasses import dataclass
+
+# Import TopicMatcher pour le boost sémantique sur les tags RGPD
+_project_root = Path(__file__).parent.parent.parent
+sys.path.insert(0, str(_project_root / 'src' / 'utils'))
+from rgpd_topics import TopicMatcher
 
 logger = logging.getLogger(__name__)
 
@@ -105,6 +112,8 @@ class CrossEncoderReranker:
         query: str,
         chunks: List,
         top_k: int = 8,
+        topic_matcher: Optional[TopicMatcher] = None,
+        question_topics: Optional[List[str]] = None,
     ) -> List[RankedChunk]:
         """
         Reranke les chunks candidats par pertinence vis-à-vis de la query.
@@ -113,6 +122,8 @@ class CrossEncoderReranker:
             query: Question utilisateur
             chunks: Liste de RetrievedChunk (du retriever)
             top_k: Nombre de chunks à garder après reranking
+            topic_matcher: TopicMatcher pour boost sémantique (optionnel)
+            question_topics: Topics extraits par l'intent classifier (optionnel)
             
         Returns:
             Liste de RankedChunk triés par score décroissant
@@ -154,17 +165,32 @@ class CrossEncoderReranker:
                 for i, c in enumerate(chunks[:top_k])
             ]
         
-        # Associer scores aux chunks
+        # Associer scores aux chunks + topic boost
+        use_topic_boost = (topic_matcher is not None and question_topics)
+        boost_count = 0
         ranked = []
         for i, (chunk, score) in enumerate(zip(chunks, scores)):
+            final_score = float(score)
+            
+            # Topic boost : bonus sémantique si tags du chunk matchent les topics
+            if use_topic_boost:
+                chunk_tags = chunk.metadata.get("rgpd_topics", "")
+                boost = topic_matcher.topic_boost(question_topics, chunk_tags)
+                if boost > 0:
+                    final_score += boost
+                    boost_count += 1
+            
             ranked.append(RankedChunk(
                 chunk_id=chunk.chunk_id,
                 text=chunk.text,
                 document_path=chunk.document_path,
-                rerank_score=float(score),
+                rerank_score=final_score,
                 original_rank=i,
                 metadata=chunk.metadata,
             ))
+        
+        if boost_count > 0:
+            logger.info(f"   🏷️  Topic boost appliqué sur {boost_count}/{len(ranked)} chunks")
         
         # Trier par score de reranking (décroissant)
         ranked.sort(key=lambda x: x.rerank_score, reverse=True)

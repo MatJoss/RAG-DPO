@@ -1,0 +1,3407 @@
+{
+  "type": "multi_run_aggregated",
+  "timestamp": "2026-03-02T22:43:44.406287",
+  "n_runs": 3,
+  "embedding_model": "BGE-M3",
+  "embedding_mode": "bge-m3",
+  "generation_mode": "single",
+  "pipeline_mode": "agent",
+  "scoring_version": "v6_free_score_discretized",
+  "global_score": {
+    "mean": 0.862,
+    "std": 0.008,
+    "runs": [
+      0.855,
+      0.87,
+      0.862
+    ]
+  },
+  "global_score_by_category": {
+    "definition": 0.924,
+    "obligation": 0.91,
+    "recommandation": 0.812,
+    "piège": 0.789,
+    "hors_perimetre": 0.807
+  },
+  "global_score_weighted_by_category": 0.849,
+  "variance_analysis": {
+    "avg_spread_per_question": 0.035,
+    "max_spread": 0.27,
+    "high_variance_questions": [
+      "q03_rt_vs_st",
+      "q09_conservation_cv",
+      "q12_conservation_50_ans",
+      "q14_article_99_ia",
+      "q27_sanctions_cnil",
+      "q30_decision_automatisee"
+    ]
+  },
+  "total_time_seconds": 3517.0,
+  "individual_run_files": [
+    "E:\\Projets\\RAG-DPO\\eval\\results_bge-m3_single_agent_20260302_220546.json",
+    "E:\\Projets\\RAG-DPO\\eval\\results_bge-m3_single_agent_20260302_222429.json",
+    "E:\\Projets\\RAG-DPO\\eval\\results_bge-m3_single_agent_20260302_224344.json"
+  ],
+  "results": [
+    {
+      "id": "q01_donnee_personnelle",
+      "question": "Qu'est-ce qu'une donnée personnelle selon le RGPD ?",
+      "category": "definition",
+      "n_runs": 3,
+      "global_score": {
+        "mean": 0.96,
+        "std": 0.0,
+        "min": 0.96,
+        "max": 0.96,
+        "runs": [
+          0.96,
+          0.96,
+          0.96
+        ]
+      },
+      "correctness": {
+        "mean": 0.92,
+        "std": 0.0,
+        "runs": [
+          0.92,
+          0.92,
+          0.92
+        ]
+      },
+      "faithfulness": {
+        "mean": 1.0,
+        "std": 0.0,
+        "runs": [
+          1.0,
+          1.0,
+          1.0
+        ]
+      },
+      "sources": {
+        "mean": 1.0,
+        "std": 0.0,
+        "runs": [
+          1.0,
+          1.0,
+          1.0
+        ]
+      },
+      "llm_judge": {
+        "mean": 1.0,
+        "std": 0.0,
+        "runs": [
+          1.0,
+          1.0,
+          1.0
+        ]
+      },
+      "semantic_sim": {
+        "mean": 0.766,
+        "std": 0.009,
+        "runs": [
+          0.766,
+          0.775,
+          0.758
+        ]
+      },
+      "keyword": {
+        "mean": 1.0,
+        "std": 0.0,
+        "runs": [
+          1.0,
+          1.0,
+          1.0
+        ]
+      },
+      "answer_length_words": {
+        "mean": 115.0,
+        "std": 44.0,
+        "runs": [
+          65,
+          139,
+          142
+        ]
+      }
+    },
+    {
+      "id": "q02_responsable_traitement",
+      "question": "Qui est responsable de traitement ?",
+      "category": "definition",
+      "n_runs": 3,
+      "global_score": {
+        "mean": 0.947,
+        "std": 0.015,
+        "min": 0.93,
+        "max": 0.96,
+        "runs": [
+          0.93,
+          0.96,
+          0.95
+        ]
+      },
+      "correctness": {
+        "mean": 0.903,
+        "std": 0.025,
+        "runs": [
+          0.88,
+          0.93,
+          0.9
+        ]
+      },
+      "faithfulness": {
+        "mean": 1.0,
+        "std": 0.0,
+        "runs": [
+          1.0,
+          1.0,
+          1.0
+        ]
+      },
+      "sources": {
+        "mean": 1.0,
+        "std": 0.0,
+        "runs": [
+          1.0,
+          1.0,
+          1.0
+        ]
+      },
+      "llm_judge": {
+        "mean": 0.983,
+        "std": 0.029,
+        "runs": [
+          0.95,
+          1.0,
+          1.0
+        ]
+      },
+      "semantic_sim": {
+        "mean": 0.747,
+        "std": 0.036,
+        "runs": [
+          0.728,
+          0.789,
+          0.724
+        ]
+      },
+      "keyword": {
+        "mean": 1.0,
+        "std": 0.0,
+        "runs": [
+          1.0,
+          1.0,
+          1.0
+        ]
+      },
+      "answer_length_words": {
+        "mean": 354,
+        "std": 248.0,
+        "runs": [
+          635,
+          259,
+          168
+        ]
+      }
+    },
+    {
+      "id": "q03_rt_vs_st",
+      "question": "Quelle est la différence entre responsable de traitement et sous-traitant ?",
+      "category": "definition",
+      "n_runs": 3,
+      "global_score": {
+        "mean": 0.877,
+        "std": 0.064,
+        "min": 0.84,
+        "max": 0.95,
+        "runs": [
+          0.84,
+          0.95,
+          0.84
+        ]
+      },
+      "correctness": {
+        "mean": 0.893,
+        "std": 0.006,
+        "runs": [
+          0.89,
+          0.9,
+          0.89
+        ]
+      },
+      "faithfulness": {
+        "mean": 1.0,
+        "std": 0.0,
+        "runs": [
+          1.0,
+          1.0,
+          1.0
+        ]
+      },
+      "sources": {
+        "mean": 0.667,
+        "std": 0.289,
+        "runs": [
+          0.5,
+          1.0,
+          0.5
+        ]
+      },
+      "llm_judge": {
+        "mean": 1.0,
+        "std": 0.0,
+        "runs": [
+          1.0,
+          1.0,
+          1.0
+        ]
+      },
+      "semantic_sim": {
+        "mean": 0.693,
+        "std": 0.015,
+        "runs": [
+          0.695,
+          0.707,
+          0.678
+        ]
+      },
+      "keyword": {
+        "mean": 1.0,
+        "std": 0.0,
+        "runs": [
+          1.0,
+          1.0,
+          1.0
+        ]
+      },
+      "answer_length_words": {
+        "mean": 444.0,
+        "std": 81.0,
+        "runs": [
+          481,
+          352,
+          500
+        ]
+      }
+    },
+    {
+      "id": "q04_aipd_obligatoire",
+      "question": "Quand une AIPD (DPIA) est-elle obligatoire ?",
+      "category": "obligation",
+      "n_runs": 3,
+      "global_score": {
+        "mean": 0.91,
+        "std": 0.0,
+        "min": 0.91,
+        "max": 0.91,
+        "runs": [
+          0.91,
+          0.91,
+          0.91
+        ]
+      },
+      "correctness": {
+        "mean": 0.83,
+        "std": 0.0,
+        "runs": [
+          0.83,
+          0.83,
+          0.83
+        ]
+      },
+      "faithfulness": {
+        "mean": 1.0,
+        "std": 0.0,
+        "runs": [
+          1.0,
+          1.0,
+          1.0
+        ]
+      },
+      "sources": {
+        "mean": 1.0,
+        "std": 0.0,
+        "runs": [
+          1.0,
+          1.0,
+          1.0
+        ]
+      },
+      "llm_judge": {
+        "mean": 0.9,
+        "std": 0.0,
+        "runs": [
+          0.9,
+          0.9,
+          0.9
+        ]
+      },
+      "semantic_sim": {
+        "mean": 0.793,
+        "std": 0.007,
+        "runs": [
+          0.788,
+          0.801,
+          0.791
+        ]
+      },
+      "keyword": {
+        "mean": 0.67,
+        "std": 0.0,
+        "runs": [
+          0.67,
+          0.67,
+          0.67
+        ]
+      },
+      "answer_length_words": {
+        "mean": 85.0,
+        "std": 22.0,
+        "runs": [
+          89,
+          62,
+          105
+        ]
+      }
+    },
+    {
+      "id": "q05_criteres_aipd_cnil",
+      "question": "Quels sont les critères du G29 qui déclenchent une AIPD selon la CNIL ?",
+      "category": "recommandation",
+      "n_runs": 3,
+      "global_score": {
+        "mean": 0.97,
+        "std": 0.0,
+        "min": 0.97,
+        "max": 0.97,
+        "runs": [
+          0.97,
+          0.97,
+          0.97
+        ]
+      },
+      "correctness": {
+        "mean": 0.943,
+        "std": 0.006,
+        "runs": [
+          0.95,
+          0.94,
+          0.94
+        ]
+      },
+      "faithfulness": {
+        "mean": 1.0,
+        "std": 0.0,
+        "runs": [
+          1.0,
+          1.0,
+          1.0
+        ]
+      },
+      "sources": {
+        "mean": 1.0,
+        "std": 0.0,
+        "runs": [
+          1.0,
+          1.0,
+          1.0
+        ]
+      },
+      "llm_judge": {
+        "mean": 1.0,
+        "std": 0.0,
+        "runs": [
+          1.0,
+          1.0,
+          1.0
+        ]
+      },
+      "semantic_sim": {
+        "mean": 0.841,
+        "std": 0.006,
+        "runs": [
+          0.848,
+          0.837,
+          0.837
+        ]
+      },
+      "keyword": {
+        "mean": 1.0,
+        "std": 0.0,
+        "runs": [
+          1.0,
+          1.0,
+          1.0
+        ]
+      },
+      "answer_length_words": {
+        "mean": 120,
+        "std": 7.0,
+        "runs": [
+          128,
+          116,
+          116
+        ]
+      }
+    },
+    {
+      "id": "q06_liste_aipd_cnil",
+      "question": "La CNIL met-elle à disposition une liste de traitements nécessitant une AIPD ?",
+      "category": "recommandation",
+      "n_runs": 3,
+      "global_score": {
+        "mean": 0.933,
+        "std": 0.006,
+        "min": 0.93,
+        "max": 0.94,
+        "runs": [
+          0.94,
+          0.93,
+          0.93
+        ]
+      },
+      "correctness": {
+        "mean": 0.88,
+        "std": 0.01,
+        "runs": [
+          0.89,
+          0.87,
+          0.88
+        ]
+      },
+      "faithfulness": {
+        "mean": 1.0,
+        "std": 0.0,
+        "runs": [
+          1.0,
+          1.0,
+          1.0
+        ]
+      },
+      "sources": {
+        "mean": 1.0,
+        "std": 0.0,
+        "runs": [
+          1.0,
+          1.0,
+          1.0
+        ]
+      },
+      "llm_judge": {
+        "mean": 0.9,
+        "std": 0.0,
+        "runs": [
+          0.9,
+          0.9,
+          0.9
+        ]
+      },
+      "semantic_sim": {
+        "mean": 0.81,
+        "std": 0.027,
+        "runs": [
+          0.837,
+          0.784,
+          0.81
+        ]
+      },
+      "keyword": {
+        "mean": 1.0,
+        "std": 0.0,
+        "runs": [
+          1.0,
+          1.0,
+          1.0
+        ]
+      },
+      "answer_length_words": {
+        "mean": 87.0,
+        "std": 51.0,
+        "runs": [
+          63,
+          52,
+          145
+        ]
+      }
+    },
+    {
+      "id": "q07_obligations_rt",
+      "question": "Quelles sont les principales obligations d'un responsable de traitement ?",
+      "category": "obligation",
+      "n_runs": 3,
+      "global_score": {
+        "mean": 0.96,
+        "std": 0.0,
+        "min": 0.96,
+        "max": 0.96,
+        "runs": [
+          0.96,
+          0.96,
+          0.96
+        ]
+      },
+      "correctness": {
+        "mean": 0.92,
+        "std": 0.0,
+        "runs": [
+          0.92,
+          0.92,
+          0.92
+        ]
+      },
+      "faithfulness": {
+        "mean": 1.0,
+        "std": 0.0,
+        "runs": [
+          1.0,
+          1.0,
+          1.0
+        ]
+      },
+      "sources": {
+        "mean": 1.0,
+        "std": 0.0,
+        "runs": [
+          1.0,
+          1.0,
+          1.0
+        ]
+      },
+      "llm_judge": {
+        "mean": 1.0,
+        "std": 0.0,
+        "runs": [
+          1.0,
+          1.0,
+          1.0
+        ]
+      },
+      "semantic_sim": {
+        "mean": 0.776,
+        "std": 0.006,
+        "runs": [
+          0.773,
+          0.783,
+          0.773
+        ]
+      },
+      "keyword": {
+        "mean": 1.0,
+        "std": 0.0,
+        "runs": [
+          1.0,
+          1.0,
+          1.0
+        ]
+      },
+      "answer_length_words": {
+        "mean": 125.0,
+        "std": 1.0,
+        "runs": [
+          124,
+          126,
+          124
+        ]
+      }
+    },
+    {
+      "id": "q08_droits_personnes",
+      "question": "Quels sont les droits des personnes concernées et leurs limites ?",
+      "category": "definition",
+      "n_runs": 3,
+      "global_score": {
+        "mean": 0.933,
+        "std": 0.006,
+        "min": 0.93,
+        "max": 0.94,
+        "runs": [
+          0.94,
+          0.93,
+          0.93
+        ]
+      },
+      "correctness": {
+        "mean": 0.883,
+        "std": 0.006,
+        "runs": [
+          0.89,
+          0.88,
+          0.88
+        ]
+      },
+      "faithfulness": {
+        "mean": 1.0,
+        "std": 0.0,
+        "runs": [
+          1.0,
+          1.0,
+          1.0
+        ]
+      },
+      "sources": {
+        "mean": 1.0,
+        "std": 0.0,
+        "runs": [
+          1.0,
+          1.0,
+          1.0
+        ]
+      },
+      "llm_judge": {
+        "mean": 1.0,
+        "std": 0.0,
+        "runs": [
+          1.0,
+          1.0,
+          1.0
+        ]
+      },
+      "semantic_sim": {
+        "mean": 0.672,
+        "std": 0.013,
+        "runs": [
+          0.687,
+          0.665,
+          0.665
+        ]
+      },
+      "keyword": {
+        "mean": 1.0,
+        "std": 0.0,
+        "runs": [
+          1.0,
+          1.0,
+          1.0
+        ]
+      },
+      "answer_length_words": {
+        "mean": 374.0,
+        "std": 63.0,
+        "runs": [
+          326,
+          350,
+          445
+        ]
+      }
+    },
+    {
+      "id": "q09_conservation_cv",
+      "question": "Une entreprise peut-elle conserver des CV indéfiniment ?",
+      "category": "recommandation",
+      "n_runs": 3,
+      "global_score": {
+        "mean": 0.87,
+        "std": 0.131,
+        "min": 0.72,
+        "max": 0.96,
+        "runs": [
+          0.72,
+          0.93,
+          0.96
+        ]
+      },
+      "correctness": {
+        "mean": 0.833,
+        "std": 0.11,
+        "runs": [
+          0.71,
+          0.87,
+          0.92
+        ]
+      },
+      "faithfulness": {
+        "mean": 0.833,
+        "std": 0.289,
+        "runs": [
+          0.5,
+          1.0,
+          1.0
+        ]
+      },
+      "sources": {
+        "mean": 1.0,
+        "std": 0.0,
+        "runs": [
+          1.0,
+          1.0,
+          1.0
+        ]
+      },
+      "llm_judge": {
+        "mean": 0.933,
+        "std": 0.058,
+        "runs": [
+          0.9,
+          0.9,
+          1.0
+        ]
+      },
+      "semantic_sim": {
+        "mean": 0.761,
+        "std": 0.022,
+        "runs": [
+          0.735,
+          0.771,
+          0.776
+        ]
+      },
+      "keyword": {
+        "mean": 0.667,
+        "std": 0.577,
+        "runs": [
+          0.0,
+          1.0,
+          1.0
+        ]
+      },
+      "answer_length_words": {
+        "mean": 141.0,
+        "std": 115.0,
+        "runs": [
+          66,
+          273,
+          83
+        ]
+      }
+    },
+    {
+      "id": "q10_interet_legitime_videosurveillance",
+      "question": "Peut-on utiliser l'intérêt légitime pour la vidéosurveillance ?",
+      "category": "recommandation",
+      "n_runs": 3,
+      "global_score": {
+        "mean": 0.837,
+        "std": 0.046,
+        "min": 0.81,
+        "max": 0.89,
+        "runs": [
+          0.89,
+          0.81,
+          0.81
+        ]
+      },
+      "correctness": {
+        "mean": 0.853,
+        "std": 0.046,
+        "runs": [
+          0.8,
+          0.88,
+          0.88
+        ]
+      },
+      "faithfulness": {
+        "mean": 0.667,
+        "std": 0.289,
+        "runs": [
+          1.0,
+          0.5,
+          0.5
+        ]
+      },
+      "sources": {
+        "mean": 1.0,
+        "std": 0.0,
+        "runs": [
+          1.0,
+          1.0,
+          1.0
+        ]
+      },
+      "llm_judge": {
+        "mean": 0.883,
+        "std": 0.029,
+        "runs": [
+          0.85,
+          0.9,
+          0.9
+        ]
+      },
+      "semantic_sim": {
+        "mean": 0.804,
+        "std": 0.01,
+        "runs": [
+          0.792,
+          0.81,
+          0.81
+        ]
+      },
+      "keyword": {
+        "mean": 0.89,
+        "std": 0.191,
+        "runs": [
+          0.67,
+          1.0,
+          1.0
+        ]
+      },
+      "answer_length_words": {
+        "mean": 137.0,
+        "std": 12.0,
+        "runs": [
+          150,
+          130,
+          130
+        ]
+      }
+    },
+    {
+      "id": "q11_opposition_traitement_rh",
+      "question": "Un salarié peut-il s'opposer à un traitement RH ?",
+      "category": "recommandation",
+      "n_runs": 3,
+      "global_score": {
+        "mean": 0.883,
+        "std": 0.04,
+        "min": 0.86,
+        "max": 0.93,
+        "runs": [
+          0.93,
+          0.86,
+          0.86
+        ]
+      },
+      "correctness": {
+        "mean": 0.79,
+        "std": 0.069,
+        "runs": [
+          0.87,
+          0.75,
+          0.75
+        ]
+      },
+      "faithfulness": {
+        "mean": 1.0,
+        "std": 0.0,
+        "runs": [
+          1.0,
+          1.0,
+          1.0
+        ]
+      },
+      "sources": {
+        "mean": 1.0,
+        "std": 0.0,
+        "runs": [
+          1.0,
+          1.0,
+          1.0
+        ]
+      },
+      "llm_judge": {
+        "mean": 0.9,
+        "std": 0.0,
+        "runs": [
+          0.9,
+          0.9,
+          0.9
+        ]
+      },
+      "semantic_sim": {
+        "mean": 0.757,
+        "std": 0.012,
+        "runs": [
+          0.771,
+          0.75,
+          0.75
+        ]
+      },
+      "keyword": {
+        "mean": 0.5,
+        "std": 0.433,
+        "runs": [
+          1.0,
+          0.25,
+          0.25
+        ]
+      },
+      "answer_length_words": {
+        "mean": 140.0,
+        "std": 98.0,
+        "runs": [
+          253,
+          83,
+          83
+        ]
+      }
+    },
+    {
+      "id": "q12_conservation_50_ans",
+      "question": "La CNIL autorise-t-elle la conservation des données clients pendant 50 ans ?",
+      "category": "piège",
+      "n_runs": 3,
+      "global_score": {
+        "mean": 0.757,
+        "std": 0.15,
+        "min": 0.66,
+        "max": 0.93,
+        "runs": [
+          0.66,
+          0.68,
+          0.93
+        ]
+      },
+      "correctness": {
+        "mean": 0.863,
+        "std": 0.021,
+        "runs": [
+          0.84,
+          0.87,
+          0.88
+        ]
+      },
+      "faithfulness": {
+        "mean": 0.333,
+        "std": 0.577,
+        "runs": [
+          0.0,
+          0.0,
+          1.0
+        ]
+      },
+      "sources": {
+        "mean": 1.0,
+        "std": 0.0,
+        "runs": [
+          1.0,
+          1.0,
+          1.0
+        ]
+      },
+      "llm_judge": {
+        "mean": 0.9,
+        "std": 0.0,
+        "runs": [
+          0.9,
+          0.9,
+          0.9
+        ]
+      },
+      "semantic_sim": {
+        "mean": 0.756,
+        "std": 0.057,
+        "runs": [
+          0.692,
+          0.775,
+          0.801
+        ]
+      },
+      "keyword": {
+        "mean": 1.0,
+        "std": 0.0,
+        "runs": [
+          1.0,
+          1.0,
+          1.0
+        ]
+      },
+      "answer_length_words": {
+        "mean": 44.0,
+        "std": 21.0,
+        "runs": [
+          25,
+          40,
+          66
+        ]
+      }
+    },
+    {
+      "id": "q13_dpo_obligatoire",
+      "question": "Le RGPD impose-t-il un DPO dans toutes les entreprises ?",
+      "category": "obligation",
+      "n_runs": 3,
+      "global_score": {
+        "mean": 0.967,
+        "std": 0.006,
+        "min": 0.96,
+        "max": 0.97,
+        "runs": [
+          0.97,
+          0.97,
+          0.96
+        ]
+      },
+      "correctness": {
+        "mean": 0.94,
+        "std": 0.017,
+        "runs": [
+          0.95,
+          0.95,
+          0.92
+        ]
+      },
+      "faithfulness": {
+        "mean": 1.0,
+        "std": 0.0,
+        "runs": [
+          1.0,
+          1.0,
+          1.0
+        ]
+      },
+      "sources": {
+        "mean": 1.0,
+        "std": 0.0,
+        "runs": [
+          1.0,
+          1.0,
+          1.0
+        ]
+      },
+      "llm_judge": {
+        "mean": 1.0,
+        "std": 0.0,
+        "runs": [
+          1.0,
+          1.0,
+          1.0
+        ]
+      },
+      "semantic_sim": {
+        "mean": 0.826,
+        "std": 0.043,
+        "runs": [
+          0.854,
+          0.848,
+          0.777
+        ]
+      },
+      "keyword": {
+        "mean": 1.0,
+        "std": 0.0,
+        "runs": [
+          1.0,
+          1.0,
+          1.0
+        ]
+      },
+      "answer_length_words": {
+        "mean": 90,
+        "std": 12.0,
+        "runs": [
+          86,
+          81,
+          103
+        ]
+      }
+    },
+    {
+      "id": "q14_article_99_ia",
+      "question": "Existe-t-il un article 99 du RGPD sur l'IA ?",
+      "category": "piège",
+      "n_runs": 3,
+      "global_score": {
+        "mean": 0.827,
+        "std": 0.098,
+        "min": 0.77,
+        "max": 0.94,
+        "runs": [
+          0.77,
+          0.94,
+          0.77
+        ]
+      },
+      "correctness": {
+        "mean": 0.69,
+        "std": 0.173,
+        "runs": [
+          0.59,
+          0.89,
+          0.59
+        ]
+      },
+      "faithfulness": {
+        "mean": 1.0,
+        "std": 0.0,
+        "runs": [
+          1.0,
+          1.0,
+          1.0
+        ]
+      },
+      "sources": {
+        "mean": 1.0,
+        "std": 0.0,
+        "runs": [
+          1.0,
+          1.0,
+          1.0
+        ]
+      },
+      "llm_judge": {
+        "mean": 0.633,
+        "std": 0.231,
+        "runs": [
+          0.5,
+          0.9,
+          0.5
+        ]
+      },
+      "semantic_sim": {
+        "mean": 0.639,
+        "std": 0.169,
+        "runs": [
+          0.541,
+          0.834,
+          0.541
+        ]
+      },
+      "keyword": {
+        "mean": 1.0,
+        "std": 0.0,
+        "runs": [
+          1.0,
+          1.0,
+          1.0
+        ]
+      },
+      "answer_length_words": {
+        "mean": 19.0,
+        "std": 12.0,
+        "runs": [
+          12,
+          32,
+          12
+        ]
+      }
+    },
+    {
+      "id": "q15_etude_impact",
+      "question": "Quand doit-on faire une étude d'impact vie privée ?",
+      "category": "obligation",
+      "n_runs": 3,
+      "global_score": {
+        "mean": 0.91,
+        "std": 0.0,
+        "min": 0.91,
+        "max": 0.91,
+        "runs": [
+          0.91,
+          0.91,
+          0.91
+        ]
+      },
+      "correctness": {
+        "mean": 0.83,
+        "std": 0.0,
+        "runs": [
+          0.83,
+          0.83,
+          0.83
+        ]
+      },
+      "faithfulness": {
+        "mean": 1.0,
+        "std": 0.0,
+        "runs": [
+          1.0,
+          1.0,
+          1.0
+        ]
+      },
+      "sources": {
+        "mean": 1.0,
+        "std": 0.0,
+        "runs": [
+          1.0,
+          1.0,
+          1.0
+        ]
+      },
+      "llm_judge": {
+        "mean": 0.9,
+        "std": 0.0,
+        "runs": [
+          0.9,
+          0.9,
+          0.9
+        ]
+      },
+      "semantic_sim": {
+        "mean": 0.657,
+        "std": 0.004,
+        "runs": [
+          0.655,
+          0.655,
+          0.662
+        ]
+      },
+      "keyword": {
+        "mean": 1.0,
+        "std": 0.0,
+        "runs": [
+          1.0,
+          1.0,
+          1.0
+        ]
+      },
+      "answer_length_words": {
+        "mean": 144.0,
+        "std": 21.0,
+        "runs": [
+          132,
+          132,
+          169
+        ]
+      }
+    },
+    {
+      "id": "q16_qui_decide_moyens",
+      "question": "Qui décide des moyens du traitement ?",
+      "category": "definition",
+      "n_runs": 3,
+      "global_score": {
+        "mean": 0.93,
+        "std": 0.0,
+        "min": 0.93,
+        "max": 0.93,
+        "runs": [
+          0.93,
+          0.93,
+          0.93
+        ]
+      },
+      "correctness": {
+        "mean": 0.88,
+        "std": 0.0,
+        "runs": [
+          0.88,
+          0.88,
+          0.88
+        ]
+      },
+      "faithfulness": {
+        "mean": 1.0,
+        "std": 0.0,
+        "runs": [
+          1.0,
+          1.0,
+          1.0
+        ]
+      },
+      "sources": {
+        "mean": 1.0,
+        "std": 0.0,
+        "runs": [
+          1.0,
+          1.0,
+          1.0
+        ]
+      },
+      "llm_judge": {
+        "mean": 0.9,
+        "std": 0.0,
+        "runs": [
+          0.9,
+          0.9,
+          0.9
+        ]
+      },
+      "semantic_sim": {
+        "mean": 0.796,
+        "std": 0.0,
+        "runs": [
+          0.796,
+          0.796,
+          0.796
+        ]
+      },
+      "keyword": {
+        "mean": 1.0,
+        "std": 0.0,
+        "runs": [
+          1.0,
+          1.0,
+          1.0
+        ]
+      },
+      "answer_length_words": {
+        "mean": 90,
+        "std": 0.0,
+        "runs": [
+          90,
+          90,
+          90
+        ]
+      }
+    },
+    {
+      "id": "q17_base_donnees_marketing",
+      "question": "Quelle est la meilleure base de données marketing en 2024 ?",
+      "category": "hors_perimetre",
+      "n_runs": 3,
+      "global_score": {
+        "mean": 0.96,
+        "std": 0.0,
+        "min": 0.96,
+        "max": 0.96,
+        "runs": [
+          0.96,
+          0.96,
+          0.96
+        ]
+      },
+      "correctness": {
+        "mean": 0.92,
+        "std": 0.0,
+        "runs": [
+          0.92,
+          0.92,
+          0.92
+        ]
+      },
+      "faithfulness": {
+        "mean": 1.0,
+        "std": 0.0,
+        "runs": [
+          1.0,
+          1.0,
+          1.0
+        ]
+      },
+      "sources": {
+        "mean": 1.0,
+        "std": 0.0,
+        "runs": [
+          1.0,
+          1.0,
+          1.0
+        ]
+      },
+      "llm_judge": {
+        "mean": 1.0,
+        "std": 0.0,
+        "runs": [
+          1.0,
+          1.0,
+          1.0
+        ]
+      },
+      "semantic_sim": {
+        "mean": 0.764,
+        "std": 0.0,
+        "runs": [
+          0.764,
+          0.764,
+          0.764
+        ]
+      },
+      "keyword": {
+        "mean": 1.0,
+        "std": 0.0,
+        "runs": [
+          1.0,
+          1.0,
+          1.0
+        ]
+      },
+      "answer_length_words": {
+        "mean": 12,
+        "std": 0.0,
+        "runs": [
+          12,
+          12,
+          12
+        ]
+      }
+    },
+    {
+      "id": "q18_contourner_cnil",
+      "question": "Comment contourner une obligation CNIL ?",
+      "category": "hors_perimetre",
+      "n_runs": 3,
+      "global_score": {
+        "mean": 0.69,
+        "std": 0.0,
+        "min": 0.69,
+        "max": 0.69,
+        "runs": [
+          0.69,
+          0.69,
+          0.69
+        ]
+      },
+      "correctness": {
+        "mean": 0.44,
+        "std": 0.0,
+        "runs": [
+          0.44,
+          0.44,
+          0.44
+        ]
+      },
+      "faithfulness": {
+        "mean": 1.0,
+        "std": 0.0,
+        "runs": [
+          1.0,
+          1.0,
+          1.0
+        ]
+      },
+      "sources": {
+        "mean": 1.0,
+        "std": 0.0,
+        "runs": [
+          1.0,
+          1.0,
+          1.0
+        ]
+      },
+      "llm_judge": {
+        "mean": 0.5,
+        "std": 0.0,
+        "runs": [
+          0.5,
+          0.5,
+          0.5
+        ]
+      },
+      "semantic_sim": {
+        "mean": 0.55,
+        "std": 0.0,
+        "runs": [
+          0.55,
+          0.55,
+          0.55
+        ]
+      },
+      "keyword": {
+        "mean": 0.0,
+        "std": 0.0,
+        "runs": [
+          0.0,
+          0.0,
+          0.0
+        ]
+      },
+      "answer_length_words": {
+        "mean": 12,
+        "std": 0.0,
+        "runs": [
+          12,
+          12,
+          12
+        ]
+      }
+    },
+    {
+      "id": "q19_base_legale_consentement",
+      "question": "Quelles sont les conditions de validité du consentement selon le RGPD ?",
+      "category": "definition",
+      "n_runs": 3,
+      "global_score": {
+        "mean": 0.947,
+        "std": 0.006,
+        "min": 0.94,
+        "max": 0.95,
+        "runs": [
+          0.94,
+          0.95,
+          0.95
+        ]
+      },
+      "correctness": {
+        "mean": 0.903,
+        "std": 0.012,
+        "runs": [
+          0.89,
+          0.91,
+          0.91
+        ]
+      },
+      "faithfulness": {
+        "mean": 1.0,
+        "std": 0.0,
+        "runs": [
+          1.0,
+          1.0,
+          1.0
+        ]
+      },
+      "sources": {
+        "mean": 1.0,
+        "std": 0.0,
+        "runs": [
+          1.0,
+          1.0,
+          1.0
+        ]
+      },
+      "llm_judge": {
+        "mean": 0.983,
+        "std": 0.029,
+        "runs": [
+          0.95,
+          1.0,
+          1.0
+        ]
+      },
+      "semantic_sim": {
+        "mean": 0.756,
+        "std": 0.0,
+        "runs": [
+          0.756,
+          0.756,
+          0.756
+        ]
+      },
+      "keyword": {
+        "mean": 1.0,
+        "std": 0.0,
+        "runs": [
+          1.0,
+          1.0,
+          1.0
+        ]
+      },
+      "answer_length_words": {
+        "mean": 342,
+        "std": 5.0,
+        "runs": [
+          336,
+          345,
+          345
+        ]
+      }
+    },
+    {
+      "id": "q20_base_legale_contrat",
+      "question": "Quand peut-on fonder un traitement sur l'exécution d'un contrat ?",
+      "category": "definition",
+      "n_runs": 3,
+      "global_score": {
+        "mean": 0.96,
+        "std": 0.0,
+        "min": 0.96,
+        "max": 0.96,
+        "runs": [
+          0.96,
+          0.96,
+          0.96
+        ]
+      },
+      "correctness": {
+        "mean": 0.92,
+        "std": 0.0,
+        "runs": [
+          0.92,
+          0.92,
+          0.92
+        ]
+      },
+      "faithfulness": {
+        "mean": 1.0,
+        "std": 0.0,
+        "runs": [
+          1.0,
+          1.0,
+          1.0
+        ]
+      },
+      "sources": {
+        "mean": 1.0,
+        "std": 0.0,
+        "runs": [
+          1.0,
+          1.0,
+          1.0
+        ]
+      },
+      "llm_judge": {
+        "mean": 1.0,
+        "std": 0.0,
+        "runs": [
+          1.0,
+          1.0,
+          1.0
+        ]
+      },
+      "semantic_sim": {
+        "mean": 0.765,
+        "std": 0.0,
+        "runs": [
+          0.765,
+          0.765,
+          0.765
+        ]
+      },
+      "keyword": {
+        "mean": 1.0,
+        "std": 0.0,
+        "runs": [
+          1.0,
+          1.0,
+          1.0
+        ]
+      },
+      "answer_length_words": {
+        "mean": 157,
+        "std": 0.0,
+        "runs": [
+          157,
+          157,
+          157
+        ]
+      }
+    },
+    {
+      "id": "q21_violation_notification_delai",
+      "question": "Dans quel délai faut-il notifier une violation de données à la CNIL ?",
+      "category": "obligation",
+      "n_runs": 3,
+      "global_score": {
+        "mean": 0.92,
+        "std": 0.0,
+        "min": 0.92,
+        "max": 0.92,
+        "runs": [
+          0.92,
+          0.92,
+          0.92
+        ]
+      },
+      "correctness": {
+        "mean": 0.85,
+        "std": 0.0,
+        "runs": [
+          0.85,
+          0.85,
+          0.85
+        ]
+      },
+      "faithfulness": {
+        "mean": 1.0,
+        "std": 0.0,
+        "runs": [
+          1.0,
+          1.0,
+          1.0
+        ]
+      },
+      "sources": {
+        "mean": 1.0,
+        "std": 0.0,
+        "runs": [
+          1.0,
+          1.0,
+          1.0
+        ]
+      },
+      "llm_judge": {
+        "mean": 0.9,
+        "std": 0.0,
+        "runs": [
+          0.9,
+          0.9,
+          0.9
+        ]
+      },
+      "semantic_sim": {
+        "mean": 0.718,
+        "std": 0.0,
+        "runs": [
+          0.718,
+          0.718,
+          0.718
+        ]
+      },
+      "keyword": {
+        "mean": 1.0,
+        "std": 0.0,
+        "runs": [
+          1.0,
+          1.0,
+          1.0
+        ]
+      },
+      "answer_length_words": {
+        "mean": 67.0,
+        "std": 40.0,
+        "runs": [
+          44,
+          114,
+          44
+        ]
+      }
+    },
+    {
+      "id": "q22_violation_information_personnes",
+      "question": "Quand faut-il informer les personnes concernées d'une violation de données ?",
+      "category": "obligation",
+      "n_runs": 3,
+      "global_score": {
+        "mean": 0.917,
+        "std": 0.012,
+        "min": 0.91,
+        "max": 0.93,
+        "runs": [
+          0.91,
+          0.91,
+          0.93
+        ]
+      },
+      "correctness": {
+        "mean": 0.85,
+        "std": 0.017,
+        "runs": [
+          0.84,
+          0.84,
+          0.87
+        ]
+      },
+      "faithfulness": {
+        "mean": 1.0,
+        "std": 0.0,
+        "runs": [
+          1.0,
+          1.0,
+          1.0
+        ]
+      },
+      "sources": {
+        "mean": 1.0,
+        "std": 0.0,
+        "runs": [
+          1.0,
+          1.0,
+          1.0
+        ]
+      },
+      "llm_judge": {
+        "mean": 0.917,
+        "std": 0.029,
+        "runs": [
+          0.9,
+          0.9,
+          0.95
+        ]
+      },
+      "semantic_sim": {
+        "mean": 0.687,
+        "std": 0.009,
+        "runs": [
+          0.682,
+          0.682,
+          0.697
+        ]
+      },
+      "keyword": {
+        "mean": 1.0,
+        "std": 0.0,
+        "runs": [
+          1.0,
+          1.0,
+          1.0
+        ]
+      },
+      "answer_length_words": {
+        "mean": 158.0,
+        "std": 11.0,
+        "runs": [
+          164,
+          164,
+          145
+        ]
+      }
+    },
+    {
+      "id": "q23_registre_obligatoire",
+      "question": "Le registre des activités de traitement est-il obligatoire pour toutes les entreprises ?",
+      "category": "obligation",
+      "n_runs": 3,
+      "global_score": {
+        "mean": 0.913,
+        "std": 0.006,
+        "min": 0.91,
+        "max": 0.92,
+        "runs": [
+          0.91,
+          0.91,
+          0.92
+        ]
+      },
+      "correctness": {
+        "mean": 0.84,
+        "std": 0.017,
+        "runs": [
+          0.83,
+          0.83,
+          0.86
+        ]
+      },
+      "faithfulness": {
+        "mean": 1.0,
+        "std": 0.0,
+        "runs": [
+          1.0,
+          1.0,
+          1.0
+        ]
+      },
+      "sources": {
+        "mean": 1.0,
+        "std": 0.0,
+        "runs": [
+          1.0,
+          1.0,
+          1.0
+        ]
+      },
+      "llm_judge": {
+        "mean": 0.867,
+        "std": 0.029,
+        "runs": [
+          0.85,
+          0.85,
+          0.9
+        ]
+      },
+      "semantic_sim": {
+        "mean": 0.73,
+        "std": 0.007,
+        "runs": [
+          0.726,
+          0.726,
+          0.738
+        ]
+      },
+      "keyword": {
+        "mean": 1.0,
+        "std": 0.0,
+        "runs": [
+          1.0,
+          1.0,
+          1.0
+        ]
+      },
+      "answer_length_words": {
+        "mean": 85.0,
+        "std": 11.0,
+        "runs": [
+          91,
+          91,
+          72
+        ]
+      }
+    },
+    {
+      "id": "q24_pseudonymisation_definition",
+      "question": "Qu'est-ce que la pseudonymisation ?",
+      "category": "definition",
+      "n_runs": 3,
+      "global_score": {
+        "mean": 0.93,
+        "std": 0.0,
+        "min": 0.93,
+        "max": 0.93,
+        "runs": [
+          0.93,
+          0.93,
+          0.93
+        ]
+      },
+      "correctness": {
+        "mean": 0.88,
+        "std": 0.0,
+        "runs": [
+          0.88,
+          0.88,
+          0.88
+        ]
+      },
+      "faithfulness": {
+        "mean": 1.0,
+        "std": 0.0,
+        "runs": [
+          1.0,
+          1.0,
+          1.0
+        ]
+      },
+      "sources": {
+        "mean": 1.0,
+        "std": 0.0,
+        "runs": [
+          1.0,
+          1.0,
+          1.0
+        ]
+      },
+      "llm_judge": {
+        "mean": 1.0,
+        "std": 0.0,
+        "runs": [
+          1.0,
+          1.0,
+          1.0
+        ]
+      },
+      "semantic_sim": {
+        "mean": 0.657,
+        "std": 0.0,
+        "runs": [
+          0.657,
+          0.657,
+          0.657
+        ]
+      },
+      "keyword": {
+        "mean": 1.0,
+        "std": 0.0,
+        "runs": [
+          1.0,
+          1.0,
+          1.0
+        ]
+      },
+      "answer_length_words": {
+        "mean": 115,
+        "std": 0.0,
+        "runs": [
+          115,
+          115,
+          115
+        ]
+      }
+    },
+    {
+      "id": "q25_anonymisation",
+      "question": "Une donnée anonymisée est-elle encore une donnée personnelle ?",
+      "category": "definition",
+      "n_runs": 3,
+      "global_score": {
+        "mean": 0.96,
+        "std": 0.0,
+        "min": 0.96,
+        "max": 0.96,
+        "runs": [
+          0.96,
+          0.96,
+          0.96
+        ]
+      },
+      "correctness": {
+        "mean": 0.93,
+        "std": 0.0,
+        "runs": [
+          0.93,
+          0.93,
+          0.93
+        ]
+      },
+      "faithfulness": {
+        "mean": 1.0,
+        "std": 0.0,
+        "runs": [
+          1.0,
+          1.0,
+          1.0
+        ]
+      },
+      "sources": {
+        "mean": 1.0,
+        "std": 0.0,
+        "runs": [
+          1.0,
+          1.0,
+          1.0
+        ]
+      },
+      "llm_judge": {
+        "mean": 1.0,
+        "std": 0.0,
+        "runs": [
+          1.0,
+          1.0,
+          1.0
+        ]
+      },
+      "semantic_sim": {
+        "mean": 0.797,
+        "std": 0.009,
+        "runs": [
+          0.799,
+          0.805,
+          0.788
+        ]
+      },
+      "keyword": {
+        "mean": 1.0,
+        "std": 0.0,
+        "runs": [
+          1.0,
+          1.0,
+          1.0
+        ]
+      },
+      "answer_length_words": {
+        "mean": 80.0,
+        "std": 16.0,
+        "runs": [
+          67,
+          75,
+          97
+        ]
+      }
+    },
+    {
+      "id": "q26_transfert_hors_ue",
+      "question": "Quelles conditions encadrent un transfert de données hors UE ?",
+      "category": "obligation",
+      "n_runs": 3,
+      "global_score": {
+        "mean": 0.83,
+        "std": 0.0,
+        "min": 0.83,
+        "max": 0.83,
+        "runs": [
+          0.83,
+          0.83,
+          0.83
+        ]
+      },
+      "correctness": {
+        "mean": 0.88,
+        "std": 0.0,
+        "runs": [
+          0.88,
+          0.88,
+          0.88
+        ]
+      },
+      "faithfulness": {
+        "mean": 1.0,
+        "std": 0.0,
+        "runs": [
+          1.0,
+          1.0,
+          1.0
+        ]
+      },
+      "sources": {
+        "mean": 0.5,
+        "std": 0.0,
+        "runs": [
+          0.5,
+          0.5,
+          0.5
+        ]
+      },
+      "llm_judge": {
+        "mean": 1.0,
+        "std": 0.0,
+        "runs": [
+          1.0,
+          1.0,
+          1.0
+        ]
+      },
+      "semantic_sim": {
+        "mean": 0.65,
+        "std": 0.0,
+        "runs": [
+          0.65,
+          0.65,
+          0.65
+        ]
+      },
+      "keyword": {
+        "mean": 1.0,
+        "std": 0.0,
+        "runs": [
+          1.0,
+          1.0,
+          1.0
+        ]
+      },
+      "answer_length_words": {
+        "mean": 232.0,
+        "std": 4.0,
+        "runs": [
+          230,
+          237,
+          230
+        ]
+      }
+    },
+    {
+      "id": "q27_sanctions_cnil",
+      "question": "Quelles sanctions peut prononcer la CNIL ?",
+      "category": "definition",
+      "n_runs": 3,
+      "global_score": {
+        "mean": 0.87,
+        "std": 0.056,
+        "min": 0.82,
+        "max": 0.93,
+        "runs": [
+          0.82,
+          0.93,
+          0.86
+        ]
+      },
+      "correctness": {
+        "mean": 0.767,
+        "std": 0.106,
+        "runs": [
+          0.67,
+          0.88,
+          0.75
+        ]
+      },
+      "faithfulness": {
+        "mean": 1.0,
+        "std": 0.0,
+        "runs": [
+          1.0,
+          1.0,
+          1.0
+        ]
+      },
+      "sources": {
+        "mean": 1.0,
+        "std": 0.0,
+        "runs": [
+          1.0,
+          1.0,
+          1.0
+        ]
+      },
+      "llm_judge": {
+        "mean": 0.933,
+        "std": 0.058,
+        "runs": [
+          0.9,
+          1.0,
+          0.9
+        ]
+      },
+      "semantic_sim": {
+        "mean": 0.638,
+        "std": 0.018,
+        "runs": [
+          0.622,
+          0.658,
+          0.634
+        ]
+      },
+      "keyword": {
+        "mean": 0.5,
+        "std": 0.5,
+        "runs": [
+          0.0,
+          1.0,
+          0.5
+        ]
+      },
+      "answer_length_words": {
+        "mean": 178.0,
+        "std": 38.0,
+        "runs": [
+          220,
+          145,
+          170
+        ]
+      }
+    },
+    {
+      "id": "q28_donnees_sensibles",
+      "question": "Quelles sont les catégories particulières de données ?",
+      "category": "definition",
+      "n_runs": 3,
+      "global_score": {
+        "mean": 0.93,
+        "std": 0.0,
+        "min": 0.93,
+        "max": 0.93,
+        "runs": [
+          0.93,
+          0.93,
+          0.93
+        ]
+      },
+      "correctness": {
+        "mean": 0.877,
+        "std": 0.006,
+        "runs": [
+          0.87,
+          0.88,
+          0.88
+        ]
+      },
+      "faithfulness": {
+        "mean": 1.0,
+        "std": 0.0,
+        "runs": [
+          1.0,
+          1.0,
+          1.0
+        ]
+      },
+      "sources": {
+        "mean": 1.0,
+        "std": 0.0,
+        "runs": [
+          1.0,
+          1.0,
+          1.0
+        ]
+      },
+      "llm_judge": {
+        "mean": 1.0,
+        "std": 0.0,
+        "runs": [
+          1.0,
+          1.0,
+          1.0
+        ]
+      },
+      "semantic_sim": {
+        "mean": 0.65,
+        "std": 0.01,
+        "runs": [
+          0.642,
+          0.647,
+          0.662
+        ]
+      },
+      "keyword": {
+        "mean": 1.0,
+        "std": 0.0,
+        "runs": [
+          1.0,
+          1.0,
+          1.0
+        ]
+      },
+      "answer_length_words": {
+        "mean": 189.0,
+        "std": 30.0,
+        "runs": [
+          217,
+          193,
+          158
+        ]
+      }
+    },
+    {
+      "id": "q29_profilage_definition",
+      "question": "Qu'est-ce que le profilage au sens du RGPD ?",
+      "category": "definition",
+      "n_runs": 3,
+      "global_score": {
+        "mean": 0.84,
+        "std": 0.017,
+        "min": 0.83,
+        "max": 0.86,
+        "runs": [
+          0.83,
+          0.83,
+          0.86
+        ]
+      },
+      "correctness": {
+        "mean": 0.707,
+        "std": 0.029,
+        "runs": [
+          0.69,
+          0.69,
+          0.74
+        ]
+      },
+      "faithfulness": {
+        "mean": 1.0,
+        "std": 0.0,
+        "runs": [
+          1.0,
+          1.0,
+          1.0
+        ]
+      },
+      "sources": {
+        "mean": 1.0,
+        "std": 0.0,
+        "runs": [
+          1.0,
+          1.0,
+          1.0
+        ]
+      },
+      "llm_judge": {
+        "mean": 0.933,
+        "std": 0.058,
+        "runs": [
+          0.9,
+          0.9,
+          1.0
+        ]
+      },
+      "semantic_sim": {
+        "mean": 0.684,
+        "std": 0.01,
+        "runs": [
+          0.678,
+          0.678,
+          0.696
+        ]
+      },
+      "keyword": {
+        "mean": 0.0,
+        "std": 0.0,
+        "runs": [
+          0.0,
+          0.0,
+          0.0
+        ]
+      },
+      "answer_length_words": {
+        "mean": 164.0,
+        "std": 46.0,
+        "runs": [
+          137,
+          137,
+          217
+        ]
+      }
+    },
+    {
+      "id": "q30_decision_automatisee",
+      "question": "Une personne peut-elle faire l'objet d'une décision entièrement automatisée ?",
+      "category": "obligation",
+      "n_runs": 3,
+      "global_score": {
+        "mean": 0.863,
+        "std": 0.084,
+        "min": 0.81,
+        "max": 0.96,
+        "runs": [
+          0.82,
+          0.96,
+          0.81
+        ]
+      },
+      "correctness": {
+        "mean": 0.753,
+        "std": 0.153,
+        "runs": [
+          0.67,
+          0.93,
+          0.66
+        ]
+      },
+      "faithfulness": {
+        "mean": 1.0,
+        "std": 0.0,
+        "runs": [
+          1.0,
+          1.0,
+          1.0
+        ]
+      },
+      "sources": {
+        "mean": 1.0,
+        "std": 0.0,
+        "runs": [
+          1.0,
+          1.0,
+          1.0
+        ]
+      },
+      "llm_judge": {
+        "mean": 0.933,
+        "std": 0.058,
+        "runs": [
+          0.9,
+          1.0,
+          0.9
+        ]
+      },
+      "semantic_sim": {
+        "mean": 0.674,
+        "std": 0.108,
+        "runs": [
+          0.623,
+          0.798,
+          0.602
+        ]
+      },
+      "keyword": {
+        "mean": 0.333,
+        "std": 0.577,
+        "runs": [
+          0.0,
+          1.0,
+          0.0
+        ]
+      },
+      "answer_length_words": {
+        "mean": 108.0,
+        "std": 41.0,
+        "runs": [
+          130,
+          60,
+          133
+        ]
+      }
+    },
+    {
+      "id": "q31_duree_conservation_paie",
+      "question": "Quelle est la durée maximale de conservation des bulletins de paie selon la CNIL ?",
+      "category": "recommandation",
+      "n_runs": 3,
+      "global_score": {
+        "mean": 0.883,
+        "std": 0.006,
+        "min": 0.88,
+        "max": 0.89,
+        "runs": [
+          0.89,
+          0.88,
+          0.88
+        ]
+      },
+      "correctness": {
+        "mean": 0.793,
+        "std": 0.006,
+        "runs": [
+          0.8,
+          0.79,
+          0.79
+        ]
+      },
+      "faithfulness": {
+        "mean": 1.0,
+        "std": 0.0,
+        "runs": [
+          1.0,
+          1.0,
+          1.0
+        ]
+      },
+      "sources": {
+        "mean": 1.0,
+        "std": 0.0,
+        "runs": [
+          1.0,
+          1.0,
+          1.0
+        ]
+      },
+      "llm_judge": {
+        "mean": 0.9,
+        "std": 0.0,
+        "runs": [
+          0.9,
+          0.9,
+          0.9
+        ]
+      },
+      "semantic_sim": {
+        "mean": 0.839,
+        "std": 0.009,
+        "runs": [
+          0.849,
+          0.834,
+          0.834
+        ]
+      },
+      "keyword": {
+        "mean": 0.33,
+        "std": 0.0,
+        "runs": [
+          0.33,
+          0.33,
+          0.33
+        ]
+      },
+      "answer_length_words": {
+        "mean": 37.0,
+        "std": 12.0,
+        "runs": [
+          24,
+          44,
+          44
+        ]
+      }
+    },
+    {
+      "id": "q32_cookies_consentement",
+      "question": "Faut-il le consentement pour tous les cookies sur un site web ?",
+      "category": "recommandation",
+      "n_runs": 3,
+      "global_score": {
+        "mean": 0.93,
+        "std": 0.0,
+        "min": 0.93,
+        "max": 0.93,
+        "runs": [
+          0.93,
+          0.93,
+          0.93
+        ]
+      },
+      "correctness": {
+        "mean": 0.873,
+        "std": 0.006,
+        "runs": [
+          0.88,
+          0.87,
+          0.87
+        ]
+      },
+      "faithfulness": {
+        "mean": 1.0,
+        "std": 0.0,
+        "runs": [
+          1.0,
+          1.0,
+          1.0
+        ]
+      },
+      "sources": {
+        "mean": 1.0,
+        "std": 0.0,
+        "runs": [
+          1.0,
+          1.0,
+          1.0
+        ]
+      },
+      "llm_judge": {
+        "mean": 0.9,
+        "std": 0.0,
+        "runs": [
+          0.9,
+          0.9,
+          0.9
+        ]
+      },
+      "semantic_sim": {
+        "mean": 0.784,
+        "std": 0.002,
+        "runs": [
+          0.787,
+          0.783,
+          0.783
+        ]
+      },
+      "keyword": {
+        "mean": 1.0,
+        "std": 0.0,
+        "runs": [
+          1.0,
+          1.0,
+          1.0
+        ]
+      },
+      "answer_length_words": {
+        "mean": 233.0,
+        "std": 5.0,
+        "runs": [
+          238,
+          230,
+          230
+        ]
+      }
+    },
+    {
+      "id": "q33_prospection_commerciale",
+      "question": "Peut-on contacter un client à des fins de prospection commerciale ?",
+      "category": "recommandation",
+      "n_runs": 3,
+      "global_score": {
+        "mean": 0.58,
+        "std": 0.0,
+        "min": 0.58,
+        "max": 0.58,
+        "runs": [
+          0.58,
+          0.58,
+          0.58
+        ]
+      },
+      "correctness": {
+        "mean": 0.41,
+        "std": 0.0,
+        "runs": [
+          0.41,
+          0.41,
+          0.41
+        ]
+      },
+      "faithfulness": {
+        "mean": 1.0,
+        "std": 0.0,
+        "runs": [
+          1.0,
+          1.0,
+          1.0
+        ]
+      },
+      "sources": {
+        "mean": 0.5,
+        "std": 0.0,
+        "runs": [
+          0.5,
+          0.5,
+          0.5
+        ]
+      },
+      "llm_judge": {
+        "mean": 0.5,
+        "std": 0.0,
+        "runs": [
+          0.5,
+          0.5,
+          0.5
+        ]
+      },
+      "semantic_sim": {
+        "mean": 0.47,
+        "std": 0.0,
+        "runs": [
+          0.47,
+          0.47,
+          0.47
+        ]
+      },
+      "keyword": {
+        "mean": 0.0,
+        "std": 0.0,
+        "runs": [
+          0.0,
+          0.0,
+          0.0
+        ]
+      },
+      "answer_length_words": {
+        "mean": 12,
+        "std": 0.0,
+        "runs": [
+          12,
+          12,
+          12
+        ]
+      }
+    },
+    {
+      "id": "q34_sous_traitant_cloud",
+      "question": "Quelles précautions pour un sous-traitant cloud hors UE ?",
+      "category": "recommandation",
+      "n_runs": 3,
+      "global_score": {
+        "mean": 0.853,
+        "std": 0.021,
+        "min": 0.83,
+        "max": 0.87,
+        "runs": [
+          0.86,
+          0.87,
+          0.83
+        ]
+      },
+      "correctness": {
+        "mean": 0.737,
+        "std": 0.035,
+        "runs": [
+          0.74,
+          0.77,
+          0.7
+        ]
+      },
+      "faithfulness": {
+        "mean": 1.0,
+        "std": 0.0,
+        "runs": [
+          1.0,
+          1.0,
+          1.0
+        ]
+      },
+      "sources": {
+        "mean": 1.0,
+        "std": 0.0,
+        "runs": [
+          1.0,
+          1.0,
+          1.0
+        ]
+      },
+      "llm_judge": {
+        "mean": 0.883,
+        "std": 0.029,
+        "runs": [
+          0.9,
+          0.9,
+          0.85
+        ]
+      },
+      "semantic_sim": {
+        "mean": 0.657,
+        "std": 0.022,
+        "runs": [
+          0.682,
+          0.639,
+          0.65
+        ]
+      },
+      "keyword": {
+        "mean": 0.443,
+        "std": 0.196,
+        "runs": [
+          0.33,
+          0.67,
+          0.33
+        ]
+      },
+      "answer_length_words": {
+        "mean": 294.0,
+        "std": 44.0,
+        "runs": [
+          290,
+          253,
+          340
+        ]
+      }
+    },
+    {
+      "id": "q35_donnees_sensibles_interdit",
+      "question": "Le RGPD interdit-il le traitement de données sensibles ?",
+      "category": "piège",
+      "n_runs": 3,
+      "global_score": {
+        "mean": 0.873,
+        "std": 0.006,
+        "min": 0.87,
+        "max": 0.88,
+        "runs": [
+          0.87,
+          0.88,
+          0.87
+        ]
+      },
+      "correctness": {
+        "mean": 0.773,
+        "std": 0.015,
+        "runs": [
+          0.77,
+          0.79,
+          0.76
+        ]
+      },
+      "faithfulness": {
+        "mean": 1.0,
+        "std": 0.0,
+        "runs": [
+          1.0,
+          1.0,
+          1.0
+        ]
+      },
+      "sources": {
+        "mean": 1.0,
+        "std": 0.0,
+        "runs": [
+          1.0,
+          1.0,
+          1.0
+        ]
+      },
+      "llm_judge": {
+        "mean": 0.9,
+        "std": 0.0,
+        "runs": [
+          0.9,
+          0.9,
+          0.9
+        ]
+      },
+      "semantic_sim": {
+        "mean": 0.786,
+        "std": 0.04,
+        "runs": [
+          0.769,
+          0.832,
+          0.757
+        ]
+      },
+      "keyword": {
+        "mean": 0.33,
+        "std": 0.0,
+        "runs": [
+          0.33,
+          0.33,
+          0.33
+        ]
+      },
+      "answer_length_words": {
+        "mean": 99.0,
+        "std": 26.0,
+        "runs": [
+          71,
+          122,
+          105
+        ]
+      }
+    },
+    {
+      "id": "q36_refus_droit_acces",
+      "question": "Peut-on refuser toute demande d'accès d'une personne ?",
+      "category": "piège",
+      "n_runs": 3,
+      "global_score": {
+        "mean": 0.7,
+        "std": 0.0,
+        "min": 0.7,
+        "max": 0.7,
+        "runs": [
+          0.7,
+          0.7,
+          0.7
+        ]
+      },
+      "correctness": {
+        "mean": 0.46,
+        "std": 0.0,
+        "runs": [
+          0.46,
+          0.46,
+          0.46
+        ]
+      },
+      "faithfulness": {
+        "mean": 1.0,
+        "std": 0.0,
+        "runs": [
+          1.0,
+          1.0,
+          1.0
+        ]
+      },
+      "sources": {
+        "mean": 1.0,
+        "std": 0.0,
+        "runs": [
+          1.0,
+          1.0,
+          1.0
+        ]
+      },
+      "llm_judge": {
+        "mean": 0.5,
+        "std": 0.0,
+        "runs": [
+          0.5,
+          0.5,
+          0.5
+        ]
+      },
+      "semantic_sim": {
+        "mean": 0.456,
+        "std": 0.0,
+        "runs": [
+          0.456,
+          0.456,
+          0.456
+        ]
+      },
+      "keyword": {
+        "mean": 0.33,
+        "std": 0.0,
+        "runs": [
+          0.33,
+          0.33,
+          0.33
+        ]
+      },
+      "answer_length_words": {
+        "mean": 12,
+        "std": 0.0,
+        "runs": [
+          12,
+          12,
+          12
+        ]
+      }
+    },
+    {
+      "id": "q37_rag_refus_antivirus",
+      "question": "Quel antivirus recommande la CNIL ?",
+      "category": "hors_perimetre",
+      "n_runs": 3,
+      "global_score": {
+        "mean": 0.85,
+        "std": 0.0,
+        "min": 0.85,
+        "max": 0.85,
+        "runs": [
+          0.85,
+          0.85,
+          0.85
+        ]
+      },
+      "correctness": {
+        "mean": 0.73,
+        "std": 0.0,
+        "runs": [
+          0.73,
+          0.73,
+          0.73
+        ]
+      },
+      "faithfulness": {
+        "mean": 1.0,
+        "std": 0.0,
+        "runs": [
+          1.0,
+          1.0,
+          1.0
+        ]
+      },
+      "sources": {
+        "mean": 1.0,
+        "std": 0.0,
+        "runs": [
+          1.0,
+          1.0,
+          1.0
+        ]
+      },
+      "llm_judge": {
+        "mean": 1.0,
+        "std": 0.0,
+        "runs": [
+          1.0,
+          1.0,
+          1.0
+        ]
+      },
+      "semantic_sim": {
+        "mean": 0.651,
+        "std": 0.0,
+        "runs": [
+          0.651,
+          0.651,
+          0.651
+        ]
+      },
+      "keyword": {
+        "mean": 0.0,
+        "std": 0.0,
+        "runs": [
+          0.0,
+          0.0,
+          0.0
+        ]
+      },
+      "answer_length_words": {
+        "mean": 12,
+        "std": 0.0,
+        "runs": [
+          12,
+          12,
+          12
+        ]
+      }
+    },
+    {
+      "id": "q38_hacker_website",
+      "question": "Comment pirater un site web ?",
+      "category": "hors_perimetre",
+      "n_runs": 3,
+      "global_score": {
+        "mean": 0.73,
+        "std": 0.017,
+        "min": 0.71,
+        "max": 0.74,
+        "runs": [
+          0.74,
+          0.74,
+          0.71
+        ]
+      },
+      "correctness": {
+        "mean": 0.503,
+        "std": 0.029,
+        "runs": [
+          0.52,
+          0.52,
+          0.47
+        ]
+      },
+      "faithfulness": {
+        "mean": 1.0,
+        "std": 0.0,
+        "runs": [
+          1.0,
+          1.0,
+          1.0
+        ]
+      },
+      "sources": {
+        "mean": 1.0,
+        "std": 0.0,
+        "runs": [
+          1.0,
+          1.0,
+          1.0
+        ]
+      },
+      "llm_judge": {
+        "mean": 0.5,
+        "std": 0.0,
+        "runs": [
+          0.5,
+          0.5,
+          0.5
+        ]
+      },
+      "semantic_sim": {
+        "mean": 0.643,
+        "std": 0.002,
+        "runs": [
+          0.644,
+          0.644,
+          0.64
+        ]
+      },
+      "keyword": {
+        "mean": 0.22,
+        "std": 0.191,
+        "runs": [
+          0.33,
+          0.33,
+          0.0
+        ]
+      },
+      "answer_length_words": {
+        "mean": 15.0,
+        "std": 2.0,
+        "runs": [
+          16,
+          16,
+          12
+        ]
+      }
+    },
+    {
+      "id": "q39_duree_conservation_client",
+      "question": "Combien de temps peut-on conserver les données clients pour prospection commerciale ?",
+      "category": "recommandation",
+      "n_runs": 3,
+      "global_score": {
+        "mean": 0.88,
+        "std": 0.0,
+        "min": 0.88,
+        "max": 0.88,
+        "runs": [
+          0.88,
+          0.88,
+          0.88
+        ]
+      },
+      "correctness": {
+        "mean": 0.78,
+        "std": 0.0,
+        "runs": [
+          0.78,
+          0.78,
+          0.78
+        ]
+      },
+      "faithfulness": {
+        "mean": 1.0,
+        "std": 0.0,
+        "runs": [
+          1.0,
+          1.0,
+          1.0
+        ]
+      },
+      "sources": {
+        "mean": 1.0,
+        "std": 0.0,
+        "runs": [
+          1.0,
+          1.0,
+          1.0
+        ]
+      },
+      "llm_judge": {
+        "mean": 0.9,
+        "std": 0.0,
+        "runs": [
+          0.9,
+          0.9,
+          0.9
+        ]
+      },
+      "semantic_sim": {
+        "mean": 0.666,
+        "std": 0.0,
+        "runs": [
+          0.666,
+          0.666,
+          0.666
+        ]
+      },
+      "keyword": {
+        "mean": 0.67,
+        "std": 0.0,
+        "runs": [
+          0.67,
+          0.67,
+          0.67
+        ]
+      },
+      "answer_length_words": {
+        "mean": 72,
+        "std": 0.0,
+        "runs": [
+          72,
+          72,
+          72
+        ]
+      }
+    },
+    {
+      "id": "q40_transfert_donnees_sensibles_cloud",
+      "question": "Peut-on transférer des données sensibles vers un cloud hors UE ?",
+      "category": "recommandation",
+      "n_runs": 3,
+      "global_score": {
+        "mean": 0.57,
+        "std": 0.0,
+        "min": 0.57,
+        "max": 0.57,
+        "runs": [
+          0.57,
+          0.57,
+          0.57
+        ]
+      },
+      "correctness": {
+        "mean": 0.4,
+        "std": 0.0,
+        "runs": [
+          0.4,
+          0.4,
+          0.4
+        ]
+      },
+      "faithfulness": {
+        "mean": 1.0,
+        "std": 0.0,
+        "runs": [
+          1.0,
+          1.0,
+          1.0
+        ]
+      },
+      "sources": {
+        "mean": 0.5,
+        "std": 0.0,
+        "runs": [
+          0.5,
+          0.5,
+          0.5
+        ]
+      },
+      "llm_judge": {
+        "mean": 0.5,
+        "std": 0.0,
+        "runs": [
+          0.5,
+          0.5,
+          0.5
+        ]
+      },
+      "semantic_sim": {
+        "mean": 0.434,
+        "std": 0.0,
+        "runs": [
+          0.434,
+          0.434,
+          0.434
+        ]
+      },
+      "keyword": {
+        "mean": 0.0,
+        "std": 0.0,
+        "runs": [
+          0.0,
+          0.0,
+          0.0
+        ]
+      },
+      "answer_length_words": {
+        "mean": 12,
+        "std": 0.0,
+        "runs": [
+          12,
+          12,
+          12
+        ]
+      }
+    },
+    {
+      "id": "q41_cookies_tracking",
+      "question": "Peut-on installer des cookies de tracking sans consentement ?",
+      "category": "recommandation",
+      "n_runs": 3,
+      "global_score": {
+        "mean": 0.47,
+        "std": 0.0,
+        "min": 0.47,
+        "max": 0.47,
+        "runs": [
+          0.47,
+          0.47,
+          0.47
+        ]
+      },
+      "correctness": {
+        "mean": 0.21,
+        "std": 0.0,
+        "runs": [
+          0.21,
+          0.21,
+          0.21
+        ]
+      },
+      "faithfulness": {
+        "mean": 1.0,
+        "std": 0.0,
+        "runs": [
+          1.0,
+          1.0,
+          1.0
+        ]
+      },
+      "sources": {
+        "mean": 0.5,
+        "std": 0.0,
+        "runs": [
+          0.5,
+          0.5,
+          0.5
+        ]
+      },
+      "llm_judge": {
+        "mean": 0.0,
+        "std": 0.0,
+        "runs": [
+          0.0,
+          0.0,
+          0.0
+        ]
+      },
+      "semantic_sim": {
+        "mean": 0.447,
+        "std": 0.0,
+        "runs": [
+          0.447,
+          0.447,
+          0.447
+        ]
+      },
+      "keyword": {
+        "mean": 0.33,
+        "std": 0.0,
+        "runs": [
+          0.33,
+          0.33,
+          0.33
+        ]
+      },
+      "answer_length_words": {
+        "mean": 12,
+        "std": 0.0,
+        "runs": [
+          12,
+          12,
+          12
+        ]
+      }
+    },
+    {
+      "id": "q42_traitement_enfants",
+      "question": "Quel âge minimum pour consentement d'un enfant à un service en ligne ?",
+      "category": "recommandation",
+      "n_runs": 3,
+      "global_score": {
+        "mean": 0.9,
+        "std": 0.035,
+        "min": 0.86,
+        "max": 0.92,
+        "runs": [
+          0.92,
+          0.92,
+          0.86
+        ]
+      },
+      "correctness": {
+        "mean": 0.823,
+        "std": 0.064,
+        "runs": [
+          0.86,
+          0.86,
+          0.75
+        ]
+      },
+      "faithfulness": {
+        "mean": 1.0,
+        "std": 0.0,
+        "runs": [
+          1.0,
+          1.0,
+          1.0
+        ]
+      },
+      "sources": {
+        "mean": 1.0,
+        "std": 0.0,
+        "runs": [
+          1.0,
+          1.0,
+          1.0
+        ]
+      },
+      "llm_judge": {
+        "mean": 0.883,
+        "std": 0.029,
+        "runs": [
+          0.9,
+          0.9,
+          0.85
+        ]
+      },
+      "semantic_sim": {
+        "mean": 0.739,
+        "std": 0.018,
+        "runs": [
+          0.75,
+          0.75,
+          0.718
+        ]
+      },
+      "keyword": {
+        "mean": 0.833,
+        "std": 0.289,
+        "runs": [
+          1.0,
+          1.0,
+          0.5
+        ]
+      },
+      "answer_length_words": {
+        "mean": 78.0,
+        "std": 16.0,
+        "runs": [
+          87,
+          87,
+          59
+        ]
+      }
+    }
+  ]
+}

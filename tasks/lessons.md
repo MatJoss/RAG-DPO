@@ -22,12 +22,33 @@
 - **Aussi valable pour** : `str(v["key"])`, `path.replace("\\", "/")` dans un f-string
 - **Contexte** : Python 3.11.9 (ce projet). Python 3.12+ lève cette restriction mais on n'y est pas.
 
+## Ne JAMAIS se résigner à "moins bon" quand le pipeline existe déjà
+- **Problème** : Tableaux HTML/PDF/DOCX ignorés ou aplatis en texte brut, alors que le pipeline LLM de conversion tabulaire (_convert_table_rows) existait déjà pour les spreadsheets
+- **Erreur de raisonnement** : "c'est un changement beaucoup plus lourd" → FAUX, il suffisait de brancher
+- **Impact** : 39 HTML avec `<table>` complètement ignorées, 264 PDF (54%) avec tableaux aplatis, 1 DOCX avec tables
+- **Fix** : `_convert_table_rows()` pipeline commun, branché dans `chunk_html()`, `chunk_pdf()`, `_chunk_word()`
+- **Règle** : Si le pipeline de conversion existe, le brancher partout. Le coût d'implémentation est toujours moindre que la dette de qualité.
+
 ## Vérifier les noms de clés JSONL avant de les utiliser
 - Le fichier `processed_chunks.jsonl` utilise `document_path`, pas `doc_path`
 - Toujours inspecter un sample avant d'écrire du code d'analyse
 
-## Scripts diagnostiques : utiliser des fichiers .py, pas des one-liners -c
+## Scripts diagnostiques : TOUJOURS créer un fichier .py temporaire
 - Les one-liners PowerShell avec `python -c` sont fragiles (échappement quotes, backslashes, longueur)
+
+## LLM parseurs : toujours splitter sur TOUS les séparateurs courants
+- **Problème** : `parse_tags()` splittait uniquement sur `,` — le LLM (Nemo) utilise parfois `;` comme séparateur
+- **Impact** : 314 chunks avaient des tags fusionnés ("données sensibles; transparence; responsabilité" = 1 tag au lieu de 3) → 7591 tags "uniques" au lieu de ~200
+- **Fix** : `re.split(r'[,;]', text)` + `.rstrip('.;:!?')` pour nettoyer la ponctuation trailing
+- **Règle** : quand on parse du texte libre LLM, toujours normaliser les séparateurs (`,`, `;`, `\n`, `|`) et nettoyer la ponctuation
+
+## Tag script : tqdm au lieu de logger.info par chunk
+- **Problème** : `tag_all_chunks.py` loggait chaque batch avec logger.info → terminal illisible sur 14k chunks
+- **Fix** : tqdm avec postfix dynamique (ok/fail), logging level WARNING pour silence
+- **Règle** : pour les scripts de traitement batch, toujours utiliser tqdm + logs silencieux
+- **Même les blocs multilignes** via `run_in_terminal` plantent : PowerShell interprète les `{}` des f-strings, les `$` comme variables, les `"` imbriqués
+- **Règle absolue** : créer `tasks/_temp_script.py`, exécuter avec `& venv\Scripts\python.exe tasks\_temp_script.py`, puis `Remove-Item`
+- Ne JAMAIS tenter d'inliner du Python contenant des f-strings dans une commande PowerShell
 
 ## ChromaDB : pré-filtrage natif > post-filtrage Python pour les metadata
 - **Problème** : stocker des tags comme string CSV `enterprise_tags: "registre,pia"` → ChromaDB ne peut pas filtrer nativement ($contains n'existe pas)
@@ -220,3 +241,16 @@
 - **Constat** : 4 itérations de prompt juge (v5→v5b→v5c→v5d) ont déplacé des points entre questions sans gain net fiable. Chaque ajustement = overfitting sur 18 questions.
 - **Règle** : figer le juge quand il est "raisonnablement calibré" et passer aux vrais gains (pipeline, retrieval, questions faibles)
 - **Seuil** : si le juge donne 100 sur reformulation, ~50-70 sur incomplet, 0 sur erreur → c'est suffisant, on arrête
+
+## Scripts diagnostiques : TOUJOURS forcer UTF-8 dans le script lui-même
+- **Erreur** : utiliser `$env:PYTHONIOENCODING='utf-8'` côté PowerShell pour contourner les problèmes d'encodage
+- **Problème** : c'est un sparadrap extérieur au script — si quelqu'un d'autre le lance, ça recasse. Et ça masque le vrai bug.
+- **Règle ABSOLUE** : TOUT script Python (temporaire, debug, analyse, one-shot) DOIT avoir `sys.stdout.reconfigure(encoding='utf-8')` dans ses premières lignes, juste après les imports système
+- **Pattern** :
+  ```python
+  import sys
+  sys.stdout.reconfigure(encoding='utf-8')
+  sys.stderr.reconfigure(encoding='utf-8')
+  ```
+- **Anti-pattern** : ne JAMAIS utiliser `$env:PYTHONIOENCODING='utf-8'` dans le terminal — le script doit être auto-suffisant
+- **Inclut** : scripts dans `tasks/`, scripts temporaires create→run→delete, scripts d'analyse, rechunk, tout

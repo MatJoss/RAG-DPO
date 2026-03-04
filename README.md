@@ -463,7 +463,7 @@ python eval/run_eval.py --verbose
 
 Exécute le benchmark 42 questions en 2 phases :
 1. **Phase 1** : Génération RAG + scoring par mots-clés + similarité sémantique (BGE-M3 cosine)
-2. **Phase 2** : LLM-as-Judge — score libre 0-100 en JSON, discrétisé côté code (100/90/75/50/25/0)
+2. **Phase 2** : LLM-as-Judge — score libre 0-100 en JSON, utilisé directement (pas de discrétisation)
 
 Score final = **55% Correctness** (60% LLM-Judge + 40% Semantic) + **25% Faithfulness** + **20% Sources**
 
@@ -580,7 +580,7 @@ observability:
 | v5 | Rechunking intelligent (overlap, heading, split sémantique) | +1% |
 | v6 | Intent Classification (7 intents, prompts spécialisés) | Prompts ciblés |
 | v6b | Agent LangGraph (8 nœuds, 5 outils) | +1.5% + robustesse |
-| v6c | Eval v5 → v6 (score libre + discrétisation, JSON, 42 questions) | Thermomètre fiable |
+| v6c | Eval v5 → v6 (score libre JSON, 42 questions) | Thermomètre fiable |
 | v6d | Migration BGE-M3 (remplace nomic, 1024d) | Embeddings FR natifs |
 | **v7** | **Détection tableaux content-based + tags RGPD guidés** | **+2.9%** (89.2% → 92.1%) |
 
@@ -591,7 +591,7 @@ Les scores ne sont **pas directement comparables** entre générations d'évalua
 | | Eval v3 (v1–v5) | Eval v4 (v6–v6b) | Eval v6 (v6c+) |
 |---|---|---|---|
 | Score final | 70% LLM-Judge + 30% Keywords | 55% Correctness + 25% Faithfulness + 20% Sources | Idem v4 |
-| LLM-Judge | Score libre 0-100 (texte) | Score libre 0-100 (texte) | Score libre 0-100 (JSON) + discrétisation code |
+| LLM-Judge | Score libre 0-100 (texte) | Score libre 0-100 (texte) | Score libre 0-100 (JSON) |
 | Dataset | 18 questions | 18 questions | **42 questions** (5 catégories) |
 | Multi-run | Non | Oui (3 runs) | Oui (3 runs) |
 | Calibration | — | — | Biais positif contrôlé pour modèles 12B |

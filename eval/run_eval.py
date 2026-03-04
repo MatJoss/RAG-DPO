@@ -423,29 +423,6 @@ def _get_llm_judge():
     return _llm_judge_provider
 
 
-def _discretize_score(raw_score: int) -> int:
-    """
-    Discrétise un score libre 0-100 du LLM en paliers calibrés.
-    
-    Le LLM donne un score libre (plus naturel pour un 12B), 
-    on normalise côté code pour éviter le clustering sur des valeurs favorites.
-    
-    Paliers : 100 / 90 / 75 / 50 / 25 / 0
-    """
-    if raw_score >= 90:
-        return 100
-    elif raw_score >= 75:
-        return 90
-    elif raw_score >= 55:
-        return 75
-    elif raw_score >= 35:
-        return 50
-    elif raw_score >= 15:
-        return 25
-    else:
-        return 0
-
-
 def llm_judge_correctness(
     question: str,
     expected_answer: str,
@@ -454,9 +431,9 @@ def llm_judge_correctness(
     """
     Juge concept-aware optimisé pour Mistral-Nemo 12B.
     
-    Stratégie v6 : score LIBRE 0-100 par le LLM, discrétisation côté code.
-    Le LLM n'est plus contraint par des paliers fixes, ce qui évite le
-    clustering sur 85 et rend 100 accessible naturellement.
+    Stratégie v7 : score LIBRE 0-100 par le LLM, utilisé directement.
+    Le LLM n'est pas contraint par des paliers fixes, ce qui évite le
+    clustering et préserve toute la granularité du jugement.
     
     Un élément essentiel = un élément dont l'absence changerait
     le sens juridique de la réponse.
@@ -559,8 +536,7 @@ Réponds en JSON :
                     if erreur:
                         score = 0.0
                     else:
-                        discretized = _discretize_score(raw_score)
-                        score = max(0.0, min(1.0, discretized / 100.0))
+                        score = max(0.0, min(1.0, raw_score / 100.0))
                     
                     logger.debug(f"Regex extraction: raw={raw_score}, erreur={erreur} → {score}")
                     return score, justification
@@ -576,10 +552,9 @@ Réponds en JSON :
             score = 0.0
             logger.debug(f"Judge raw={raw_score} → erreur_factuelle=true → 0")
         else:
-            # Discrétiser le score libre → paliers calibrés
-            discretized = _discretize_score(raw_score)
-            score = max(0.0, min(1.0, discretized / 100.0))
-            logger.debug(f"Judge raw={raw_score} → discretized={discretized} → {score}")
+            # Score libre normalisé 0-1 (pas de discrétisation)
+            score = max(0.0, min(1.0, raw_score / 100.0))
+            logger.debug(f"Judge raw={raw_score} → {score}")
         
         return score, justification
         
@@ -1140,10 +1115,10 @@ def run_evaluation(
             "avg_global_score": round(avg_global, 3) if valid_results else 0,
             "avg_global_score_by_category": round(weighted_by_category, 3) if cat_averages else 0,
             "avg_time_per_question": round(avg_time, 1) if valid_results else 0,
-            "scoring_version": "v6_free_score_discretized",
+            "scoring_version": "v7_free_score",
             "scoring_weights": {"correctness": 0.55, "faithfulness": 0.25, "conciseness": 0.00, "sources": 0.20},
             "correctness_formula": "0.60*llm_judge + 0.40*semantic_sim (keyword traced only)",
-            "judge_mode": "free 0-100 → discretized (100/90/75/50/25/0)",
+            "judge_mode": "free 0-100 (raw score, no discretization)",
             "conciseness_mode": "disabled (traced only)",
             "results": results,
         }, f, ensure_ascii=False, indent=2)
@@ -1385,7 +1360,7 @@ def run_multi_evaluation(
             "embedding_mode": embedding_mode,
             "generation_mode": "single" if not enable_dual_gen else "dual",
             "pipeline_mode": "agent" if use_agent else "native",
-            "scoring_version": "v6_free_score_discretized",
+            "scoring_version": "v7_free_score",
             "global_score": {"mean": round(mean_global, 3), "std": round(std_global, 3), "runs": [round(x, 3) for x in all_globals]},
             "global_score_by_category": {cat: round(avg, 3) for cat, avg in cat_avgs_multi.items()} if cat_means_multi else {},
             "global_score_weighted_by_category": round(weighted_by_cat, 3) if cat_means_multi else 0,

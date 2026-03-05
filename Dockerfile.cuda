@@ -1,68 +1,93 @@
 # ─────────────────────────────────────────────────────────────────────────────
 # Dockerfile.cuda — RAG-DPO Streamlit App (GPU variant)
 # ─────────────────────────────────────────────────────────────────────────────
-# Variante GPU pour faire tourner embeddings + reranker sur CUDA.
-# Inclut flash-attn pour accélérer les modèles transformer (BGE-M3, reranker).
+# Multi-stage build :
+#   Stage 1 (flash-builder) : compile flash-attn (~1h, caché tant que torch
+#            ne change pas → rebuild de l'app quasi-instantané)
+#   Stage 2 (app)           : installe requirements + code source
 #
 # Usage:
 #   docker compose -f docker-compose.yml -f docker-compose.gpu.yml up -d
-#
-# Note: le build de flash-attn compile du C++/CUDA (~10 min la première fois).
-# L'image NVIDIA fournit le CUDA toolkit nécessaire à la compilation.
 # ─────────────────────────────────────────────────────────────────────────────
 
-# Image NVIDIA avec CUDA toolkit (nécessaire pour compiler flash-attn)
-FROM nvidia/cuda:12.6.3-devel-ubuntu22.04 AS base
 
-# Empêcher les prompts interactifs pendant l'install
+# ═════════════════════════════════════════════════════════════════════════════
+# Stage 1 — Compiler flash-attn (couche lourde, rarement invalidée)
+# ═════════════════════════════════════════════════════════════════════════════
+FROM nvidia/cuda:12.6.3-devel-ubuntu22.04 AS flash-builder
+
 ENV DEBIAN_FRONTEND=noninteractive
-ENV PYTHONUNBUFFERED=1
-ENV PYTHONDONTWRITEBYTECODE=1
 
-# Installer Python 3.11 + dépendances système
+# Python 3.11 via deadsnakes
 RUN apt-get update && apt-get install -y --no-install-recommends \
     software-properties-common \
     && add-apt-repository ppa:deadsnakes/ppa \
     && apt-get update && apt-get install -y --no-install-recommends \
-    python3.11 \
-    python3.11-venv \
-    python3.11-dev \
-    python3-pip \
-    build-essential \
-    curl \
-    git \
-    ninja-build \
+    python3.11 python3.11-venv python3.11-dev python3-pip \
+    build-essential git ninja-build \
     && rm -rf /var/lib/apt/lists/*
 
-# Faire de Python 3.11 le défaut
+RUN update-alternatives --install /usr/bin/python python /usr/bin/python3.11 1 \
+    && update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.11 1
+RUN python -m pip install --upgrade pip
+
+# Installer torch (nécessaire pour compiler flash-attn)
+RUN pip install --no-cache-dir torch==2.10.0 --index-url https://download.pytorch.org/whl/cu126
+
+# Dépendances de build requises par flash-attn setup.py
+RUN pip install --no-cache-dir packaging setuptools wheel
+
+# Compiler flash-attn → wheel dans /wheels/
+# MAX_JOBS=2 pour éviter OOM/crash WSL (~1h de compilation)
+ENV MAX_JOBS=2
+RUN pip wheel --no-cache-dir --no-build-isolation --wheel-dir=/wheels flash-attn
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+# Stage 2 — Image finale de l'application
+# ═════════════════════════════════════════════════════════════════════════════
+FROM nvidia/cuda:12.6.3-devel-ubuntu22.04 AS app
+
+ENV DEBIAN_FRONTEND=noninteractive
+ENV PYTHONUNBUFFERED=1
+ENV PYTHONDONTWRITEBYTECODE=1
+
+# Python 3.11 + dépendances système
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    software-properties-common \
+    && add-apt-repository ppa:deadsnakes/ppa \
+    && apt-get update && apt-get install -y --no-install-recommends \
+    python3.11 python3.11-venv python3.11-dev python3-pip \
+    build-essential curl git ninja-build \
+    && rm -rf /var/lib/apt/lists/*
+
 RUN update-alternatives --install /usr/bin/python python /usr/bin/python3.11 1 \
     && update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.11 1
 
-# Mettre à jour pip
+# Supprimer les packages système distutils qui bloquent pip (blinker, etc.)
+RUN rm -rf /usr/lib/python3/dist-packages/blinker* \
+           /usr/lib/python3/dist-packages/blinker-*.egg-info
+
 RUN python -m pip install --upgrade pip
 
 # ── Dossier de travail ───────────────────────────────────────────────────────
 WORKDIR /app
 
-# ── Dépendances Python (couche cachée si requirements.txt ne change pas) ────
+# ── Dépendances Python ──────────────────────────────────────────────────────
 COPY requirements.txt .
 
-# Installer PyTorch avec CUDA 12.6 (~2 GB)
+# PyTorch CUDA 12.6
 RUN pip install --no-cache-dir torch==2.10.0 --index-url https://download.pytorch.org/whl/cu126
 
-# Installer le reste des dépendances
+# Dépendances de l'app
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Installer flash-attn (compilation C++/CUDA, ~10 min)
-# MAX_JOBS=4 pour éviter OOM pendant la compilation
-# --no-build-isolation car torch doit être visible pendant la compilation
-ENV MAX_JOBS=4
-RUN pip install --no-cache-dir flash-attn --no-build-isolation
+# Flash-attn : copier le wheel pré-compilé du stage 1 (instantané)
+COPY --from=flash-builder /wheels /tmp/wheels
+RUN pip install --no-cache-dir /tmp/wheels/*.whl && rm -rf /tmp/wheels
 
 # ── Code source ──────────────────────────────────────────────────────────────
 COPY . .
-
-# Rendre l'entrypoint exécutable
 RUN chmod +x /app/scripts/entrypoint.sh
 
 # ── Variables d'environnement par défaut ─────────────────────────────────────

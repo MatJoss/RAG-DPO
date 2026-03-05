@@ -691,13 +691,11 @@ def evaluate_single(qa_item: Dict, answer: str, sources: List[Dict] = None, use_
 # Pipeline Init
 # ═══════════════════════════════════════════════════════════════
 
-def init_pipeline(embedding_mode: str = "bge-m3", enable_dual_gen: bool = False, use_agent: bool = False, rerank_top_k: int = 10):
+def init_pipeline(enable_dual_gen: bool = False, use_agent: bool = False, rerank_top_k: int = 10):
     """
     Initialise le pipeline RAG pour l'évaluation.
     
     Args:
-        embedding_mode: 'bge-m3' (défaut) ou 'nomic' pour sélectionner
-                        l'embedding provider et la collection ChromaDB correspondante.
         enable_dual_gen: Active/désactive la dual-generation (self-consistency).
         use_agent: Si True, utilise le pipeline LangGraph agent au lieu du natif.
         rerank_top_k: Nombre de chunks gardés après reranking (défaut: 10).
@@ -713,38 +711,19 @@ def init_pipeline(embedding_mode: str = "bge-m3", enable_dual_gen: bool = False,
     
     client = chromadb.PersistentClient(path=str(vectordb_path))
     
-    # Sélection collection + embedding provider selon le mode
-    if embedding_mode == "nomic":
-        collection_name = "rag_dpo_chunks_nomic"
-        try:
-            collection = client.get_collection(collection_name)
-        except Exception:
-            print(f"❌ Collection '{collection_name}' introuvable.")
-            print(f"   Lancez d'abord : python eval/index_nomic.py")
-            sys.exit(1)
-        
-        llm_provider = OllamaProvider(
-            base_url="http://localhost:11434",
-            model="mistral-nemo"
-        )
-        # Nomic : embeddings via OllamaProvider (768 dims)
-        # embedding_provider=None → le retriever utilisera llm_provider.embed()
-        embedding_provider = None
-        print(f"📐 Embedding: nomic-embed-text (Ollama, 768d) — collection: {collection_name}")
-    else:
-        collection_name = "rag_dpo_chunks"
-        collection = client.get_collection(collection_name)
-        
-        llm_provider = OllamaProvider(
-            base_url="http://localhost:11434",
-            model="mistral-nemo"
-        )
-        
-        from src.utils.embedding_provider import EmbeddingProvider
-        embedding_provider = EmbeddingProvider(
-            cache_dir=str(project_root / "models" / "huggingface" / "hub"),
-        )
-        print(f"📐 Embedding: BGE-M3 (sentence-transformers, 1024d) — collection: {collection_name}")
+    collection_name = "rag_dpo_chunks"
+    collection = client.get_collection(collection_name)
+    
+    llm_provider = OllamaProvider(
+        base_url="http://localhost:11434",
+        model="mistral-nemo"
+    )
+    
+    from src.utils.embedding_provider import EmbeddingProvider
+    embedding_provider = EmbeddingProvider(
+        cache_dir=str(project_root / "models" / "huggingface" / "hub"),
+    )
+    print(f"📐 Embedding: BGE-M3 (sentence-transformers, 1024d) — collection: {collection_name}")
     
     pipeline = create_pipeline(
         collection=collection,
@@ -796,7 +775,6 @@ def run_evaluation(
     dry_run: bool = False,
     verbose: bool = False,
     use_llm_judge: bool = True,
-    embedding_mode: str = "bge-m3",
     enable_dual_gen: bool = False,
     use_agent: bool = False,
     rerank_top_k: int = 10,
@@ -809,7 +787,6 @@ def run_evaluation(
         question_ids: Liste d'IDs à évaluer (None = tous)
         dry_run: Si True, affiche les questions sans les exécuter
         verbose: Si True, affiche les réponses complètes
-        embedding_mode: 'bge-m3' ou 'nomic'
         rerank_top_k: Nombre de chunks gardés après reranking (défaut: 10)
     
     Returns:
@@ -827,7 +804,7 @@ def run_evaluation(
         print("❌ Aucune question trouvée avec les IDs spécifiés")
         return {}
     
-    emb_label = "BGE-M3" if embedding_mode == "bge-m3" else "nomic-embed-text"
+    emb_label = "BGE-M3"
     topk_label = f", top_k={rerank_top_k}" if rerank_top_k != 10 else ""
     print(f"\n{'='*70}")
     print(f"🧪 ÉVALUATION RAG-DPO — {len(dataset)} questions [{emb_label}{topk_label}]")
@@ -845,7 +822,7 @@ def run_evaluation(
     agent_label = " [Agent LangGraph]" if use_agent else ""
     topk_label = f" [top_k={rerank_top_k}]" if rerank_top_k != 10 else ""
     print(f"\u23f3 Initialisation du pipeline RAG ({emb_label}, {dual_label}{agent_label}{topk_label})...")
-    pipeline = init_pipeline(embedding_mode=embedding_mode, enable_dual_gen=enable_dual_gen, use_agent=use_agent, rerank_top_k=rerank_top_k)
+    pipeline = init_pipeline(enable_dual_gen=enable_dual_gen, use_agent=use_agent, rerank_top_k=rerank_top_k)
     print("✅ Pipeline prêt\n")
     
     # ═══════════════════════════════════════════════════════════
@@ -1106,16 +1083,14 @@ def run_evaluation(
                 print(f"    • {r['id']} : {r['error'][:100]}")
     
     # Sauvegarder les résultats
-    emb_suffix = "nomic" if embedding_mode == "nomic" else "bge-m3"
     gen_suffix = "single" if not enable_dual_gen else "dual"
     agent_suffix = "_agent" if use_agent else ""
     topk_suffix = f"_topk{rerank_top_k}" if rerank_top_k != 10 else ""
-    output_path = project_root / "eval" / f"results_{emb_suffix}_{gen_suffix}{agent_suffix}{topk_suffix}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+    output_path = project_root / "eval" / f"results_bge-m3_{gen_suffix}{agent_suffix}{topk_suffix}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
     with open(output_path, "w", encoding="utf-8") as f:
         json.dump({
             "timestamp": datetime.now().isoformat(),
-            "embedding_model": emb_label,
-            "embedding_mode": embedding_mode,
+            "embedding_model": "BGE-M3",
             "generation_mode": "single" if not enable_dual_gen else "dual",
             "pipeline_mode": "agent" if use_agent else "native",
             "n_questions": len(dataset),
@@ -1153,7 +1128,6 @@ def run_multi_evaluation(
     question_ids: Optional[List[str]] = None,
     verbose: bool = False,
     use_llm_judge: bool = True,
-    embedding_mode: str = "bge-m3",
     enable_dual_gen: bool = False,
     use_agent: bool = False,
     rerank_top_k: int = 10,
@@ -1193,7 +1167,6 @@ def run_multi_evaluation(
             dry_run=False,
             verbose=verbose if run_idx == 0 else False,  # Verbose seulement au 1er run
             use_llm_judge=use_llm_judge,
-            embedding_mode=embedding_mode,
             enable_dual_gen=enable_dual_gen,
             use_agent=use_agent,
             rerank_top_k=rerank_top_k,
@@ -1335,11 +1308,10 @@ def run_multi_evaluation(
         print(f"  🔴 Variance ÉLEVÉE (σ = {std_global:.1%}) — résultats non fiables sans 5+ runs")
     
     # Sauvegarder le rapport agrégé
-    emb_suffix = "nomic" if embedding_mode == "nomic" else "bge-m3"
     gen_suffix = "single" if not enable_dual_gen else "dual"
     agent_suffix = "_agent" if use_agent else ""
     topk_suffix = f"_topk{rerank_top_k}" if rerank_top_k != 10 else ""
-    output_path = project_root / "eval" / f"results_{emb_suffix}_{gen_suffix}{agent_suffix}{topk_suffix}_{n_runs}runs_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+    output_path = project_root / "eval" / f"results_bge-m3_{gen_suffix}{agent_suffix}{topk_suffix}_{n_runs}runs_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
     
     # Construire résultats agrégés par question
     aggregated_results = []
@@ -1370,8 +1342,7 @@ def run_multi_evaluation(
             "type": "multi_run_aggregated",
             "timestamp": datetime.now().isoformat(),
             "n_runs": n_runs,
-            "embedding_model": "BGE-M3" if embedding_mode == "bge-m3" else "nomic-embed-text",
-            "embedding_mode": embedding_mode,
+            "embedding_model": "BGE-M3",
             "generation_mode": "single" if not enable_dual_gen else "dual",
             "pipeline_mode": "agent" if use_agent else "native",
             "rerank_top_k": rerank_top_k,
@@ -1409,8 +1380,6 @@ def main():
     parser.add_argument("--verbose", action="store_true", help="Affiche les réponses complètes")
     parser.add_argument("--no-llm-judge", action="store_true", help="Désactive le LLM-as-judge (keyword matching seul)")
     parser.add_argument("--dataset", default=None, help="Chemin vers le dataset JSON")
-    parser.add_argument("--embedding", choices=["bge-m3", "nomic"], default="bge-m3",
-                        help="Modèle d'embedding à utiliser (défaut: bge-m3)")
     parser.add_argument("--dual", action="store_true",
                         help="Active la dual-generation (single-gen par défaut, dual plus lent)")
     parser.add_argument("--agent", action="store_true",
@@ -1435,7 +1404,6 @@ def main():
             question_ids=args.ids,
             verbose=args.verbose,
             use_llm_judge=not args.no_llm_judge,
-            embedding_mode=args.embedding,
             enable_dual_gen=args.dual,
             use_agent=args.agent,
             rerank_top_k=args.top_k,
@@ -1447,7 +1415,6 @@ def main():
             dry_run=args.dry_run,
             verbose=args.verbose,
             use_llm_judge=not args.no_llm_judge,
-            embedding_mode=args.embedding,
             enable_dual_gen=args.dual,
             use_agent=args.agent,
             rerank_top_k=args.top_k,

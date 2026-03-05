@@ -132,43 +132,54 @@ The transition from v6b to v7 (March 2026) introduced two major changes:
 
 ### Measured Gains
 
-> **Note**: v6b (Before) scores used discretized scoring that inflated results. v7 (After) scores use raw scoring v7 — deltas are therefore not directly comparable.
+> **Note**: v6b (Before) scores used discretized scoring that inflated results. v10 (After) scores use raw scoring v7 — deltas are therefore not directly comparable.
 
-| Metric | Before (v6b, discretized scoring) | After (v7+v8, raw scoring) | Δ |
+| Metric | Before (v6b, discretized scoring) | After (v10, raw scoring) | Δ |
 |---|---|---|---|
-| **Global score** | 89.2% ± 1.1%¹ | **89.3% ± 0.6%** | **+0.1 pts** (real ~+2.5 pts) |
-| Weighted score | 89.6%¹ | 87.1% | -2.5¹ |
-| Questions < 80% | 4 | **0** | -4 |
-| Unstable questions (spread > 10%) | 6 | **5** | -1 |
-| Average spread per question | 0.049 | **0.030** | ÷1.6 |
-| Max spread | 0.47 | **0.32** | ÷1.5 |
+| **Global score** | 89.2% ± 1.1%¹ | **90.4% ± 0.4%** | **+1.2 pts** (real ~+3.6 pts) |
+| Weighted score | 89.6%¹ | **92.3%** | **+2.7** |
+| Questions ≥ 85% | — | **45/48** (94%) | — |
+| Questions < 80% | 4 | **2** | -2 |
+| Std (stability) | 0.011 | **0.004** | ÷2.75 |
+| Dataset | 42 questions (5 cat.) | **48 questions (11 cat.)** | +6 composites |
 | Chunks in ChromaDB | ~14,400 | **16,919** | +2,519 |
 
 ¹ *Discretized scoring (v6): LLM scores were rounded to 6 tiers (0/25/50/75/90/100), inflating results by ~+2.4 pts.*
 
-### By Category
+### By Category (vs baseline v6b)
 
 | Category | Before¹ | After (raw) | Δ |
 |---|---|---|---|
-| Definition | 93.3% | **91.5%** | -1.8¹ |
-| Obligation | 92.0% | **89.9%** | -2.1¹ |
-| Recommendation | 83.1% | **86.0%** | **+2.9** |
-| Tricky | 91.2% | **89.8%** | -1.4¹ |
-| Out of scope | 88.3% | **91.3%** | **+3.0** |
+| Definition | 93.3% | **91.2%** | -2.1¹ |
+| Obligation | 92.0% | **88.8%** | -3.2¹ |
+| Recommendation | 83.1% | **88.2%** | **+5.1** |
+| Tricky | 91.2% | **92.2%** | **+1.0** |
+| Out of scope | 88.3% | **92.0%** | **+3.7** |
 
-¹ *Apparent decreases are due to the switch to raw (non-discretized) scoring. The “recommendation” category genuinely improved thanks to table extraction.*
+¹ *Apparent decreases in definition/obligation are due to the switch to raw (non-discretized) scoring. The "recommendation" and "out of scope" categories genuinely improved.*
 
-> **The "recommendation" category (+2.9 pts)** benefits most from the new chunking, alongside "out of scope" (+3.0 pts, thanks to deterministic refusal). CNIL tables containing retention periods, prospecting rules, and cookie recommendations were precisely in the `<table>` HTML elements ignored by the old chunker.
+**6 new composite categories** (multi-aspect questions, v10):
 
-### Top 3 Improvements
+| Category | Score | Sample Question |
+|---|---|---|
+| Organization | **97.0%** | DPO: obligation and missions |
+| Contractual | **95.3%** | Subprocessor: obligations and contract |
+| Procedure | **94.0%** | Data breach: deadline and notification |
+| Documentation | **93.0%** | Processing register: content and obligation |
+| Methodology | **92.7%** | DPIA: obligation, method, actors |
+| International | **91.0%** | Transfers outside EU: conditions and mechanisms |
+
+> These 6 composite questions test the **query decomposition** capability: the system decomposes into sub-questions, performs a single global retrieval, then generates a structured response with sections. Average score: **93.8%**.
+
+### Top 3 Improvements (vs baseline)
 
 | Question | Before¹ | After (raw) | Gain |
 |---|---|---|---|
-| q33 — Commercial prospecting | 48% | **86.0%** | **+38 pts** |
-| q40 — Sensitive data to non-EU cloud | 58% | **85.0%** | **+27.0 pts** |
-| q11 — Objection to HR processing | 70% | **90.0%** | **+20.0 pts** |
+| q41 — Tracking cookies | 74.0% | **93.0%** | **+19.0 pts** |
+| q12 — 50-year retention (tricky) | 82.7% | **91.7%** | **+9.0 pts** |
+| q40 — Sensitive data to non-EU cloud | 85.0% | **83.0%** | -2.0 pts |
 
-These three questions relied on information contained in **HTML tables** from CNIL. The old chunker (`<h2>, <h3>, <p>, <ul>` only) completely ignored `<table>` elements, making this data invisible to the retriever.
+> **The "recommendation" category** shows the greatest improvement (+5.1 real pts), thanks to properly extracted CNIL tables and optimized prompts.
 
 ### Key Takeaway
 
@@ -374,7 +385,8 @@ RAG-DPO/
 ├── pages/
 │   ├── 1_💬_Chat.py            # Interactive RAG chat + feedback + Agent/Native toggle
 │   ├── 2_📊_Dashboard.py       # Observability dashboard (metrics, alerts)
-│   └── 3_📂_Documents.py       # Enterprise document management
+│   ├── 3_📂_Documents.py       # Enterprise document management
+│   └── 4_ℹ️_À_propos.py        # Credits, architecture, project links
 ├── test_rag.py                 # CLI RAG testing
 ├── check_install.py            # Installation verification
 ├── configs/
@@ -491,6 +503,7 @@ Opens the multipage application in the browser:
 | 💬 **Chat** | RAG Q&A interface with cited sources, 👍/👎 feedback, Agent/Native toggle |
 | 📊 **Dashboard** | Real-time metrics, alerts, feedback, JSON export |
 | 📂 **Documents** | Enterprise document management (import, list, purge) |
+| ℹ️ **About** | Credits, technical architecture, project links |
 
 Chat features:
 - **Agent / Native toggle** in sidebar (agent recommended)

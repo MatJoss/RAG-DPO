@@ -380,7 +380,8 @@ RAG-DPO/
 ├── pages/
 │   ├── 1_💬_Chat.py            # Chat RAG interactif + feedback + toggle Agent/Natif
 │   ├── 2_📊_Dashboard.py       # Dashboard observabilité (métriques, alertes)
-│   └── 3_📂_Documents.py       # Gestion documents entreprise
+│   ├── 3_📂_Documents.py       # Gestion documents entreprise
+│   └── 4_ℹ️_À_propos.py        # Crédits, architecture, liens
 ├── test_rag.py                 # Test RAG en ligne de commande
 ├── check_install.py            # Vérification de l'installation
 ├── configs/
@@ -497,6 +498,7 @@ Ouvre l'application multipage dans le navigateur :
 | 💬 **Chat** | Interface Q&R RAG avec sources citées, feedback 👍/👎 et toggle Agent/Natif |
 | 📊 **Dashboard** | Métriques temps réel, alertes, feedback, export JSON |
 | 📂 **Documents** | Gestion des documents entreprise (import, liste, purge) |
+| ℹ️ **À propos** | Crédits, architecture technique, liens du projet |
 
 Fonctionnalités du chat :
 - **Toggle Agent / Natif** dans la sidebar (agent recommandé)

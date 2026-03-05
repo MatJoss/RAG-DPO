@@ -256,8 +256,7 @@ def main():
                     and message.get("sub_questions") and message.get("sub_answers")
                     and len(message["sub_questions"]) > 1):
                 for i, (sq, sa) in enumerate(zip(message["sub_questions"], message["sub_answers"])):
-                    icon = "🔸" if i == 0 else "🔹"
-                    with st.expander(f"{icon} {sq}", expanded=(i == 0)):
+                    with st.expander(f"🔍 {sq}", expanded=(i == 0)):
                         st.markdown(sa)
             else:
                 st.markdown(message["content"])
@@ -347,8 +346,7 @@ def main():
                 if has_sub:
                     # Questions composites : 1 expander par sous-question
                     for i, (sq, sa) in enumerate(zip(response.sub_questions, response.sub_answers)):
-                        icon = "🔸" if i == 0 else "🔹"
-                        with st.expander(f"{icon} {sq}", expanded=(i == 0)):
+                        with st.expander(f"🔍 {sq}", expanded=(i == 0)):
                             st.markdown(sa)
                 else:
                     st.markdown(response.answer)

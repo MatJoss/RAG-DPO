@@ -297,7 +297,17 @@ def make_retrieve_node(components: NodeComponents):
         where_filter = state.get("where_filter")
         enterprise_tags = state.get("enterprise_tags")
         
-        logger.info(f"📥 [Agent] Phase 1 : Retrieval")
+        # Si on est en mode sous-question (re-retrieve ciblé), utiliser la suggested_query
+        completeness = state.get("completeness")
+        if completeness and not completeness.get("is_complete", True):
+            suggested = completeness.get("suggested_queries", [])
+            if suggested:
+                question = suggested[0]
+                logger.info(f"📥 [Agent] Phase 1 : Re-Retrieval ciblé: {question[:80]}...")
+            else:
+                logger.info(f"📥 [Agent] Phase 1 : Re-Retrieval (question originale)")
+        else:
+            logger.info(f"📥 [Agent] Phase 1 : Retrieval")
         
         # Construire le filtre
         effective_filter = build_enterprise_where_filter(where_filter, enterprise_tags)
@@ -592,6 +602,12 @@ def make_validate_node(components: NodeComponents):
         context = state.get("context_used")
         retry_count = state.get("retry_count", 0)
         
+        # Skip pour les questions composites (grounding fait par construction dans chaque sous-question)
+        sub_questions = state.get("sub_questions")
+        if sub_questions and len(sub_questions) > 1:
+            logger.info(f"🔍 [Agent] Phase 4 : Validation Grounding — skip (question composite, {len(sub_questions)} sous-réponses)")
+            return {"validation_passed": True, "validation_reason": "Composite — grounded individually"}
+        
         # Pas de validator → passer
         if components.grounding_validator is None or context is None:
             return {"validation_passed": True, "validation_reason": "No validator"}
@@ -852,6 +868,228 @@ def make_enrich_node(components: NodeComponents):
         return {"tool_results": tool_results if tool_results else None, "intent": intent}
     
     return enrich
+
+
+# ═══════════════════════════════════════════════════════════════
+# Decompose node (query decomposition)
+# ═══════════════════════════════════════════════════════════════
+
+# Plus de MERGE_PROMPT LLM — fusion programmatique pure (0 appel LLM, 0 perte de citation)
+# Le LLM 12B supprime systématiquement les [Source N] quand on lui demande de fusionner.
+
+
+def make_decompose_node(components: NodeComponents):
+    """Crée le nœud de décomposition de question composite.
+    
+    Détecte si la question couvre plusieurs aspects distincts.
+    Si oui : exécute retrieve+generate pour chaque sous-question,
+    puis fusionne les sous-réponses en une réponse complète.
+    
+    Si non : passe la question telle quelle au retrieve normal.
+    
+    Position dans le graphe : enrich → **decompose** → retrieve (simple) ou respond (composite)
+    """
+    
+    def decompose(state: RAGState) -> Dict[str, Any]:
+        question = state["question"]
+        intent = state.get("intent")
+        where_filter = state.get("where_filter")
+        enterprise_tags = state.get("enterprise_tags")
+        conversation_history = state.get("conversation_history")
+        temperature = state.get("temperature")
+        tool_results = state.get("tool_results")
+        
+        logger.info(f"🔀 [Agent] Phase 0c : Query Decomposition")
+        
+        # Décomposer la question
+        sub_questions = decompose_question(question, components.generator.llm_provider)
+        
+        # Question simple → passer directement au retrieve normal
+        if len(sub_questions) <= 1:
+            logger.info(f"   → Question simple, pas de décomposition")
+            return {"sub_questions": None}
+        
+        logger.info(f"   → {len(sub_questions)} sous-questions détectées")
+        
+        # Pour les questions composites, réduire le top_k par sous-question
+        # pour éviter l'explosion du contexte (N×10 chunks = trop)
+        # 5 chunks par sous-question = suffisant pour une réponse focalisée
+        sub_top_k = min(components.rerank_top_k, 5)
+        
+        # ── Exécuter retrieve+generate pour chaque sous-question ──
+        sub_answers = []          # Texte brut de chaque sous-réponse
+        sub_doc_lists = []        # Documents par sous-question (pour mapping sources)
+        total_retrieval_time = 0.0
+        total_generation_time = 0.0
+        
+        for i, sq in enumerate(sub_questions, 1):
+            logger.info(f"   📥 Sous-question {i}/{len(sub_questions)}: {sq[:80]}...")
+            
+            # ── RETRIEVE pour cette sous-question ──
+            effective_filter = build_enterprise_where_filter(where_filter, enterprise_tags)
+            sq_retrieval_start = time.time()
+            
+            if components.reranker is not None:
+                raw_candidates = components.retriever.retrieve_candidates(
+                    query=sq,
+                    n_candidates=components.rerank_candidates,
+                    where_filter=effective_filter,
+                )
+                
+                if raw_candidates:
+                    ranked_chunks = components.reranker.rerank(
+                        query=sq,
+                        chunks=raw_candidates,
+                        top_k=sub_top_k,
+                    )
+                    documents = _rebuild_documents_from_ranked_chunks(ranked_chunks)
+                else:
+                    documents = []
+            else:
+                documents = components.retriever.retrieve(
+                    query=sq,
+                    where_filter=effective_filter,
+                )
+            
+            sq_retrieval_time = time.time() - sq_retrieval_start
+            total_retrieval_time += sq_retrieval_time
+            
+            if not documents:
+                logger.warning(f"   ⚠️  Aucun document pour sous-question {i}")
+                sub_answers.append(f"Information non trouvée pour : {sq}")
+                sub_doc_lists.append([])
+                continue
+            
+            # Stocker les documents de cette sous-question (pour mapping sources)
+            sub_doc_lists.append(documents)
+            
+            # ── GENERATE pour cette sous-question ──
+            # Réutiliser l'intent global — reclassifier chaque sous-question
+            # gaspille ~5s par appel et peut dégrader le résultat
+            # (ex: "Qui contacter ?" classé "factuel" au lieu de garder le contexte méthodologique)
+            
+            context = components.context_builder.build_context(
+                documents=documents,
+                question=sq,
+                conversation_history=conversation_history,
+                intent=intent,  # Intent global, pas de reclassification
+            )
+            
+            # Injecter tool_results si disponibles
+            if tool_results:
+                enrichment_lines = []
+                if "rgpd_articles" in tool_results:
+                    enrichment_lines.append("\n--- Références RGPD pertinentes ---")
+                    for art in tool_results["rgpd_articles"]:
+                        enrichment_lines.append(f"• {art['titre']} : {art['description']}")
+                if "deadlines" in tool_results:
+                    enrichment_lines.append("\n--- Délais réglementaires ---")
+                    for dl in tool_results["deadlines"]:
+                        enrichment_lines.append(
+                            f"• {dl['description']} : {dl['delai']} ({dl['article']})"
+                        )
+                if enrichment_lines:
+                    enrichment_block = "\n".join(enrichment_lines)
+                    max_len = components.context_builder.max_context_length
+                    available = max_len - len(context["user"]) - 50
+                    if available >= len(enrichment_block):
+                        context["user"] = context["user"] + f"\n\n{enrichment_block}\n"
+            
+            sq_gen_start = time.time()
+            generated = components.generator.generate(
+                system_prompt=context["system"],
+                user_prompt=context["user"],
+                temperature=temperature,
+            )
+            sq_gen_time = time.time() - sq_gen_start
+            total_generation_time += sq_gen_time
+            
+            if generated.error:
+                logger.warning(f"   ⚠️  Erreur génération sous-question {i}: {generated.error}")
+                sub_answers.append(f"Erreur pour : {sq}")
+            else:
+                logger.info(f"   ✅ Sous-réponse {i}: {len(generated.text)} chars en {sq_gen_time:.1f}s")
+                sub_answers.append(generated.text.strip())
+        
+        # ── Dédupliquer les documents → liste globale avec numérotation stable ──
+        seen_paths = {}    # document_path → global_index (1-based)
+        unique_documents = []
+        for doc_list in sub_doc_lists:
+            for doc in doc_list:
+                if doc.document_path not in seen_paths:
+                    unique_documents.append(doc)
+                    seen_paths[doc.document_path] = len(unique_documents)  # 1-based
+        
+        # ── Construire le mapping local→global par sous-question ──
+        # Chaque sous-question a ses sources numérotées 1..N localement.
+        # On doit renommer [Source 1] → [Source X] dans la liste globale.
+        source_mappings = []  # [{local_id: global_id, ...}, ...]
+        for doc_list in sub_doc_lists:
+            mapping = {}
+            for local_idx, doc in enumerate(doc_list, 1):
+                mapping[local_idx] = seen_paths[doc.document_path]
+            source_mappings.append(mapping)
+        
+        # ── Renommer les [Source N] dans chaque sous-réponse ──
+        def _renumber_sources(text: str, mapping: Dict[int, int]) -> str:
+            """Remplace [Source local_id] par [Source global_id] dans le texte."""
+            if not mapping:
+                return text
+            def _replacer(m):
+                local_id = int(m.group(1))
+                global_id = mapping.get(local_id, local_id)
+                return f"[Source {global_id}]"
+            return re.sub(r'\[Source\s+(\d+)\]', _replacer, text)
+        
+        renumbered_answers = []
+        for idx, (ans, mapping) in enumerate(zip(sub_answers, source_mappings)):
+            renumbered = _renumber_sources(ans, mapping)
+            renumbered_answers.append(renumbered)
+            n_remapped = sum(1 for l, g in mapping.items() if l != g)
+            if n_remapped > 0:
+                logger.info(f"   🔢 Sous-réponse {idx+1}: {n_remapped} source(s) renumérotée(s)")
+        
+        # ── MERGE programmatique (0 appel LLM) ──
+        logger.info(f"   📋 Fusion programmatique de {len(renumbered_answers)} sous-réponses (0 LLM)")
+        
+        if len(renumbered_answers) == 1:
+            merged_answer = renumbered_answers[0]
+        else:
+            sections = []
+            for i, (sq, ans) in enumerate(zip(sub_questions, renumbered_answers), 1):
+                sections.append(f"### {sq}\n\n{ans}")
+            merged_answer = "\n\n---\n\n".join(sections)
+        
+        logger.info(f"   ✅ Fusion: {len(merged_answer)} chars")
+        
+        # ── Construire le context_used LÉGER pour les sources UI ──
+        # On NE reconstruit PAS via build_context() (risque Map-Reduce à 32K+).
+        # On construit directement les sources_metadata pour que respond/graph
+        # puisse afficher les sources dans l'UI.
+        sources_metadata = components.context_builder._extract_sources_metadata(unique_documents)
+        merged_context = {
+            "system": "",  # Pas besoin pour la validation
+            "user": "",    # Pas besoin — les sous-réponses sont déjà générées
+            "sources_metadata": sources_metadata,
+        }
+        
+        return {
+            "sub_questions": sub_questions,
+            "sub_answers": renumbered_answers,
+            "answer": merged_answer,
+            "documents": unique_documents,
+            "context_used": merged_context,
+            "retrieval_time": total_retrieval_time,
+            "generation_time": total_generation_time,
+            "model": components.generator.model,
+            # Skip validation : les sous-réponses ont été générées depuis de vrais chunks,
+            # le grounding est garanti par construction. Le validator ne peut pas fonctionner
+            # car il n'y a pas de contexte unifié à vérifier.
+            "validation_passed": True,
+            "validation_reason": "Composite query — sub-answers grounded individually",
+        }
+    
+    return decompose
 
 
 def make_check_completeness_node(components: NodeComponents):

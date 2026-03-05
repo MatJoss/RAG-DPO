@@ -691,7 +691,7 @@ def evaluate_single(qa_item: Dict, answer: str, sources: List[Dict] = None, use_
 # Pipeline Init
 # ═══════════════════════════════════════════════════════════════
 
-def init_pipeline(embedding_mode: str = "bge-m3", enable_dual_gen: bool = False, use_agent: bool = False):
+def init_pipeline(embedding_mode: str = "bge-m3", enable_dual_gen: bool = False, use_agent: bool = False, rerank_top_k: int = 10):
     """
     Initialise le pipeline RAG pour l'évaluation.
     
@@ -700,6 +700,7 @@ def init_pipeline(embedding_mode: str = "bge-m3", enable_dual_gen: bool = False,
                         l'embedding provider et la collection ChromaDB correspondante.
         enable_dual_gen: Active/désactive la dual-generation (self-consistency).
         use_agent: Si True, utilise le pipeline LangGraph agent au lieu du natif.
+        rerank_top_k: Nombre de chunks gardés après reranking (défaut: 10).
     """
     import chromadb
     from src.utils.llm_provider import OllamaProvider
@@ -759,7 +760,9 @@ def init_pipeline(embedding_mode: str = "bge-m3", enable_dual_gen: bool = False,
         model="mistral-nemo",
         temperature=0.0,
         debug_mode=True,
+        rerank_top_k=rerank_top_k,
     )
+    print(f"📊 Rerank top_k: {rerank_top_k}")
     
     if use_agent:
         from src.rag.agent import create_agent_pipeline
@@ -776,6 +779,7 @@ def init_pipeline(embedding_mode: str = "bge-m3", enable_dual_gen: bool = False,
             model="mistral-nemo",
             temperature=0.0,
             max_retries=1,
+            rerank_top_k=rerank_top_k,
         )
         print(f"\U0001f916 Mode: Agent LangGraph (classify→retrieve→generate→validate→respond)")
     
@@ -795,6 +799,7 @@ def run_evaluation(
     embedding_mode: str = "bge-m3",
     enable_dual_gen: bool = False,
     use_agent: bool = False,
+    rerank_top_k: int = 10,
 ) -> Dict:
     """
     Exécute l'évaluation complète.
@@ -805,6 +810,7 @@ def run_evaluation(
         dry_run: Si True, affiche les questions sans les exécuter
         verbose: Si True, affiche les réponses complètes
         embedding_mode: 'bge-m3' ou 'nomic'
+        rerank_top_k: Nombre de chunks gardés après reranking (défaut: 10)
     
     Returns:
         Résultats complets de l'évaluation
@@ -822,8 +828,9 @@ def run_evaluation(
         return {}
     
     emb_label = "BGE-M3" if embedding_mode == "bge-m3" else "nomic-embed-text"
+    topk_label = f", top_k={rerank_top_k}" if rerank_top_k != 10 else ""
     print(f"\n{'='*70}")
-    print(f"🧪 ÉVALUATION RAG-DPO — {len(dataset)} questions [{emb_label}]")
+    print(f"🧪 ÉVALUATION RAG-DPO — {len(dataset)} questions [{emb_label}{topk_label}]")
     print(f"{'='*70}\n")
     
     if dry_run:
@@ -836,8 +843,9 @@ def run_evaluation(
     # Init pipeline
     dual_label = "dual-gen" if enable_dual_gen else "single-gen"
     agent_label = " [Agent LangGraph]" if use_agent else ""
-    print(f"\u23f3 Initialisation du pipeline RAG ({emb_label}, {dual_label}{agent_label})...")
-    pipeline = init_pipeline(embedding_mode=embedding_mode, enable_dual_gen=enable_dual_gen, use_agent=use_agent)
+    topk_label = f" [top_k={rerank_top_k}]" if rerank_top_k != 10 else ""
+    print(f"\u23f3 Initialisation du pipeline RAG ({emb_label}, {dual_label}{agent_label}{topk_label})...")
+    pipeline = init_pipeline(embedding_mode=embedding_mode, enable_dual_gen=enable_dual_gen, use_agent=use_agent, rerank_top_k=rerank_top_k)
     print("✅ Pipeline prêt\n")
     
     # ═══════════════════════════════════════════════════════════
@@ -1101,7 +1109,8 @@ def run_evaluation(
     emb_suffix = "nomic" if embedding_mode == "nomic" else "bge-m3"
     gen_suffix = "single" if not enable_dual_gen else "dual"
     agent_suffix = "_agent" if use_agent else ""
-    output_path = project_root / "eval" / f"results_{emb_suffix}_{gen_suffix}{agent_suffix}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+    topk_suffix = f"_topk{rerank_top_k}" if rerank_top_k != 10 else ""
+    output_path = project_root / "eval" / f"results_{emb_suffix}_{gen_suffix}{agent_suffix}{topk_suffix}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
     with open(output_path, "w", encoding="utf-8") as f:
         json.dump({
             "timestamp": datetime.now().isoformat(),
@@ -1115,6 +1124,7 @@ def run_evaluation(
             "avg_global_score": round(avg_global, 3) if valid_results else 0,
             "avg_global_score_by_category": round(weighted_by_category, 3) if cat_averages else 0,
             "avg_time_per_question": round(avg_time, 1) if valid_results else 0,
+            "rerank_top_k": rerank_top_k,
             "scoring_version": "v7_free_score",
             "scoring_weights": {"correctness": 0.55, "faithfulness": 0.25, "conciseness": 0.00, "sources": 0.20},
             "correctness_formula": "0.60*llm_judge + 0.40*semantic_sim (keyword traced only)",
@@ -1146,6 +1156,7 @@ def run_multi_evaluation(
     embedding_mode: str = "bge-m3",
     enable_dual_gen: bool = False,
     use_agent: bool = False,
+    rerank_top_k: int = 10,
 ) -> Dict:
     """
     Exécute N runs d'évaluation et agrège les résultats avec moyenne ± écart-type.
@@ -1162,7 +1173,8 @@ def run_multi_evaluation(
         Dict avec scores moyens, écart-types, et détails par run
     """
     print(f"\n{'='*70}")
-    print(f"🔄 MULTI-RUN EVALUATION — {n_runs} runs")
+    topk_label = f" [top_k={rerank_top_k}]" if rerank_top_k != 10 else ""
+    print(f"🔄 MULTI-RUN EVALUATION — {n_runs} runs{topk_label}")
     print(f"{'='*70}\n")
     
     all_runs = []       # Liste de dicts retournés par run_evaluation
@@ -1184,6 +1196,7 @@ def run_multi_evaluation(
             embedding_mode=embedding_mode,
             enable_dual_gen=enable_dual_gen,
             use_agent=use_agent,
+            rerank_top_k=rerank_top_k,
         )
         
         all_runs.append(result)
@@ -1325,7 +1338,8 @@ def run_multi_evaluation(
     emb_suffix = "nomic" if embedding_mode == "nomic" else "bge-m3"
     gen_suffix = "single" if not enable_dual_gen else "dual"
     agent_suffix = "_agent" if use_agent else ""
-    output_path = project_root / "eval" / f"results_{emb_suffix}_{gen_suffix}{agent_suffix}_{n_runs}runs_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+    topk_suffix = f"_topk{rerank_top_k}" if rerank_top_k != 10 else ""
+    output_path = project_root / "eval" / f"results_{emb_suffix}_{gen_suffix}{agent_suffix}{topk_suffix}_{n_runs}runs_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
     
     # Construire résultats agrégés par question
     aggregated_results = []
@@ -1360,6 +1374,7 @@ def run_multi_evaluation(
             "embedding_mode": embedding_mode,
             "generation_mode": "single" if not enable_dual_gen else "dual",
             "pipeline_mode": "agent" if use_agent else "native",
+            "rerank_top_k": rerank_top_k,
             "scoring_version": "v7_free_score",
             "global_score": {"mean": round(mean_global, 3), "std": round(std_global, 3), "runs": [round(x, 3) for x in all_globals]},
             "global_score_by_category": {cat: round(avg, 3) for cat, avg in cat_avgs_multi.items()} if cat_means_multi else {},
@@ -1402,6 +1417,8 @@ def main():
                         help="Utilise le pipeline LangGraph agent au lieu du natif")
     parser.add_argument("--runs", type=int, default=1,
                         help="Nombre de runs à exécuter et moyenner (défaut: 1, recommandé: 3)")
+    parser.add_argument("--top-k", type=int, default=10,
+                        help="Nombre de chunks gardés après reranking (défaut: 10, tester: 4-15)")
     
     args = parser.parse_args()
     
@@ -1421,6 +1438,7 @@ def main():
             embedding_mode=args.embedding,
             enable_dual_gen=args.dual,
             use_agent=args.agent,
+            rerank_top_k=args.top_k,
         )
     else:
         run_evaluation(
@@ -1432,6 +1450,7 @@ def main():
             embedding_mode=args.embedding,
             enable_dual_gen=args.dual,
             use_agent=args.agent,
+            rerank_top_k=args.top_k,
         )
 
 

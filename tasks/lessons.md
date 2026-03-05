@@ -299,3 +299,12 @@
 - **Règle** : ne garder que les dépendances **directes** (pas les 200+ transitives) mais toujours avec `==`
 - **Ne pas embarquer** : les sous-dépendances (aiohttp, urllib3, etc.) — pip les résout automatiquement
 - **Processus** : 1) `pip freeze` dans l'env qui marche, 2) croiser avec le requirements.txt existant, 3) ne garder que les directes avec `==`
+
+## Query decomposition : le vrai levier pour les questions composites
+- **Erreur d'analyse** : j'ai conclu "plafond modèle 12B" alors que le vrai problème était l'orchestration des questions multi-aspects
+- **Constat GPT** : une question type "dois-je faire une AIPD, comment, et qui contacter ?" = 3 tâches simultanées. Un 12B simplifie car il ne sait pas structurer 4 tâches en parallèle
+- **Mais** : le pipeline avait déjà intent classification, prompts spécialisés, retrieval hybride — ce n'est pas le modèle seul qui limitait
+- **Fix** : nœud `decompose` dans le graphe LangGraph — détecte les questions multi-aspects, exécute retrieve+generate par sous-question, fusionne
+- **Impact attendu** : +10-15 points sur les questions composites, 0 impact sur les questions simples (passthrough)
+- **Règle** : avant de conclure "le modèle ne peut pas", vérifier si l'orchestration est en cause. Pipeline tuning ≠ modèle tuning.
+- **Pattern** : decompose → retrieve₁+generate₁ + retrieve₂+generate₂ → merge = chaque sous-tâche est atomique et dans les capacités du 12B

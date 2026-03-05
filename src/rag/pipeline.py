@@ -95,6 +95,10 @@ class RAGResponse:
     # Intent classifié
     intent: Optional[QuestionIntent] = None
     
+    # Query decomposition (questions composites)
+    sub_questions: Optional[List[str]] = None
+    sub_answers: Optional[List[str]] = None
+    
     # Erreur éventuelle
     error: Optional[str] = None
 

@@ -317,9 +317,9 @@ def decompose_question(question: str, llm_provider) -> List[str]:
     Décompose une question complexe en sous-questions atomiques.
     
     Utile pour les questions multi-aspects :
-    "Quels sont les droits des personnes ET leurs limites ?"
-    → ["Quels sont les droits des personnes concernées ?",
-       "Quelles sont les limites aux droits des personnes ?"]
+    "Dois-je faire une AIPD et comment ?"
+    → ["Quand une AIPD est-elle obligatoire selon le RGPD ?",
+       "Quelles sont les étapes pour réaliser une AIPD ?"]
     
     Args:
         question: Question utilisateur
@@ -328,21 +328,30 @@ def decompose_question(question: str, llm_provider) -> List[str]:
     Returns:
         Liste de sous-questions (1 si pas décomposable)
     """
-    prompt = f"""Analyse cette question RGPD. Si elle contient PLUSIEURS aspects distincts, décompose-la en sous-questions.
-Si la question est simple et porte sur UN SEUL aspect, retourne-la telle quelle.
+    prompt = f"""Analyse cette question RGPD et détermine si elle contient PLUSIEURS aspects distincts.
 
 Question : {question}
 
-Réponds UNIQUEMENT avec une liste JSON de questions (1 à 3 max) :
-["question 1", "question 2"]
+RÈGLES :
+1. Si la question porte sur UN SEUL aspect → retourne ["question originale"]
+2. Si la question contient 2-3 aspects DISTINCTS → décompose en sous-questions AUTONOMES
+3. Chaque sous-question doit être compréhensible SEULE (pas de "et pour cela ?")
+4. Maximum 3 sous-questions
+5. Ne décompose PAS si les aspects sont fortement liés (ex: "définition et exemples" = 1 seul aspect)
 
-Si la question est simple :
-["{question}"]
+EXEMPLES :
+- "Qu'est-ce qu'une donnée personnelle ?" → ["Qu'est-ce qu'une donnée personnelle ?"]
+- "Dois-je faire une AIPD et comment la réaliser ?" → ["Quand une AIPD est-elle obligatoire selon le RGPD ?", "Quelles sont les étapes pour réaliser une AIPD ?"]
+- "Peux-tu m'expliquer l'AIPD, comment la faire, et qui contacter ?" → ["Quand une AIPD est-elle obligatoire selon le RGPD ?", "Quelles sont les étapes pour réaliser une AIPD ?", "Quels acteurs internes interviennent dans une AIPD ?"]
+- "Quelle est la différence entre RT et ST ?" → ["Quelle est la différence entre responsable de traitement et sous-traitant ?"]
+
+Réponds UNIQUEMENT en JSON, rien d'autre :
+["question 1", "question 2"]
 
 JSON :"""
 
     try:
-        raw = llm_provider.generate(prompt, temperature=0.0, max_tokens=200)
+        raw = llm_provider.generate(prompt, temperature=0.0, max_tokens=300)
         
         # Parser la liste JSON
         text = raw.strip()
@@ -351,10 +360,14 @@ JSON :"""
             import json
             questions = json.loads(match.group())
             if isinstance(questions, list) and all(isinstance(q, str) for q in questions):
-                # Max 3 sous-questions
-                result = questions[:3]
+                # Max 3 sous-questions, filtrer les vides/trop courtes
+                result = [q.strip() for q in questions[:3] if q.strip() and len(q.strip()) >= 10]
+                if not result:
+                    return [question]
                 if len(result) > 1:
                     logger.info(f"🔀 Question décomposée en {len(result)} sous-questions")
+                    for i, sq in enumerate(result, 1):
+                        logger.info(f"   Q{i}: {sq}")
                 return result
         
         return [question]

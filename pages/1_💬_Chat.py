@@ -332,12 +332,27 @@ def main():
                 st.markdown(f'<div class="msg-time">{resp_time}</div>', unsafe_allow_html=True)
                 st.markdown(response.answer)
 
+                decompose_info = ""
+                has_sub = (hasattr(response, 'sub_questions') and response.sub_questions
+                           and len(response.sub_questions) > 1)
+                if has_sub:
+                    decompose_info = f" | 🔀 {len(response.sub_questions)} sous-questions"
+
                 st.caption(
                     f"⏱️ {response.total_time:.1f}s "
                     f"| 📚 {len(response.sources)} sources "
                     f"| ✅ {len(response.cited_sources)} citées"
                     f"{'  | 🤖 Agent' if use_agent else ''}"
+                    f"{decompose_info}"
                 )
+
+                # Sous-réponses individuelles (si décomposition)
+                if has_sub and hasattr(response, 'sub_answers') and response.sub_answers:
+                    with st.expander(f"🔀 Voir les {len(response.sub_questions)} sous-réponses détaillées", expanded=False):
+                        for sq, sa in zip(response.sub_questions, response.sub_answers):
+                            st.markdown(f"**{sq}**")
+                            st.markdown(sa)
+                            st.markdown("---")
 
                 render_sources_block(response.sources)
 
@@ -378,9 +393,10 @@ def main():
                     }
                 )
 
-    # Footer
-    st.markdown("---")
-    st.caption("🔒 RAG-DPO Assistant — Sources CNIL + documents internes — mistral-nemo 12B — 100% local")
+    # Footer (dans le sidebar pour ne pas apparaître en haut quand le chat est vide)
+    with st.sidebar:
+        st.markdown("---")
+        st.caption("🔒 RAG-DPO — mistral-nemo 12B — 100% local")
 
 
 main()

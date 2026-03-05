@@ -3,16 +3,20 @@ RAG Agent Graph — Définition du StateGraph LangGraph.
 
 Graphe d'états avec routage conditionnel et tools :
 
-    START → rewrite → classify → enrich → retrieve → generate → expert_refinement → validate ─→ check_completeness ─→ respond → END
-                                                ↑                                                          │
-                                                └──── (retry: re-retrieve ciblé) ──────────────────────────┘
+    START → rewrite → classify → enrich → decompose ─┬─ composite → validate → respond → END
+                                                       └─ simple → retrieve → generate → validate → check_completeness → respond → END
+                                                                       ↑                                    │
+                                                                       └──── (retry: re-retrieve ciblé) ────┘
 
 Le nœud rewrite résout les références multi-turn ("et pour eux ?",
 "les mêmes conditions ?") en reformulant la question en autonome.
 
 L'enrichissement (enrich) injecte des infos structurées (articles RGPD,
-délais) dans le state AVANT le retrieval — l'info est ensuite injectée
-dans le prompt au moment du generate.
+délais) dans le state AVANT le retrieval.
+
+Le nœud decompose détecte les questions multi-aspects et les traite
+indépendamment (retrieve+generate par sous-question puis merge).
+Pour les questions simples, il passe directement au retrieve normal.
 
 La boucle check_completeness → retrieve est le vrai avantage agent :
 si la réponse est incomplète, on re-recherche sur les aspects manquants.
@@ -35,6 +39,7 @@ from .nodes import (
     _classify_refusal_type,
     make_check_completeness_node,
     make_classify_node,
+    make_decompose_node,
     make_enrich_node,
     make_expert_refinement_node,
     make_generate_node,
@@ -58,10 +63,11 @@ def build_graph(components: NodeComponents, config: Optional[Dict] = None) -> St
     
     Architecture (expert_refinement optionnel via config) :
         rewrite → classify ─┬─ intent=refus → refusal → respond
-                             └─ else → enrich → retrieve → generate → [expert_refinement] → validate → check_completeness → respond
-                                                   ↑                          ↑                                  │
-                                                   │                          └── (grounding retry) ─────────────┤
-                                                   └── (completeness re-retrieve) ───────────────────────────────┘
+                             └─ else → enrich → decompose ─┬─ composite → respond (sous-réponses déjà fusionnées)
+                                                            └─ simple → retrieve → generate → [expert_refinement] → validate → check_completeness → respond
+                                                                           ↑                          ↑                                  │
+                                                                           │                          └── (grounding retry) ─────────────┤
+                                                                           └── (completeness re-retrieve) ───────────────────────────────┘
     """
     graph = StateGraph(RAGState)
     
@@ -69,6 +75,7 @@ def build_graph(components: NodeComponents, config: Optional[Dict] = None) -> St
     graph.add_node("rewrite", make_rewrite_node(components))
     graph.add_node("classify", make_classify_node(components))
     graph.add_node("enrich", make_enrich_node(components))
+    graph.add_node("decompose", make_decompose_node(components))
     graph.add_node("retrieve", make_retrieve_node(components))
     graph.add_node("generate", make_generate_node(components))
     graph.add_node("validate", make_validate_node(components))
@@ -111,7 +118,23 @@ def build_graph(components: NodeComponents, config: Optional[Dict] = None) -> St
         {"refusal": "refusal", "enrich": "enrich"},
     )
     graph.add_edge("refusal", "respond")
-    graph.add_edge("enrich", "retrieve")
+    graph.add_edge("enrich", "decompose")
+    
+    # Routage après decompose : composite → respond (déjà fusionné), simple → retrieve
+    def route_after_decompose(state: RAGState) -> str:
+        """Si la question a été décomposée, les sous-réponses sont déjà fusionnées → respond.
+        Sinon → pipeline normal (retrieve → generate)."""
+        sub_questions = state.get("sub_questions")
+        if sub_questions and len(sub_questions) > 1:
+            # Question composite : retrieve+generate+merge déjà faits dans le nœud decompose
+            return "validate"
+        return "retrieve"
+    
+    graph.add_conditional_edges(
+        "decompose",
+        route_after_decompose,
+        {"validate": "validate", "retrieve": "retrieve"},
+    )
     graph.add_edge("retrieve", "generate")
     
     if enable_refinement:
@@ -124,12 +147,24 @@ def build_graph(components: NodeComponents, config: Optional[Dict] = None) -> St
     def should_retry(state: RAGState) -> str:
         """Décide si on relance la génération ou on passe au check de complétude."""
         if state.get("validation_passed", True):
+            # Questions composites → skip check_completeness (déjà couvert par decompose)
+            sub_questions = state.get("sub_questions")
+            if sub_questions and len(sub_questions) > 1:
+                return "respond"
             return "check_completeness"
         if state.get("retry_count", 0) > components.max_retries:
+            # Questions composites → respond directement
+            sub_questions = state.get("sub_questions")
+            if sub_questions and len(sub_questions) > 1:
+                return "respond"
             return "check_completeness"
         if state.get("error"):
             return "respond"
         # Retry : re-générer avec temperature plus basse
+        # Mais pas pour les questions composites (la fusion est faite)
+        sub_questions = state.get("sub_questions")
+        if sub_questions and len(sub_questions) > 1:
+            return "respond"
         return "generate"
     
     graph.add_conditional_edges(
@@ -277,6 +312,8 @@ class RAGAgentPipeline:
             generation_time=final_state.get("generation_time", 0.0),
             total_time=final_state.get("total_time", time.time() - start),
             intent=final_state.get("intent"),
+            sub_questions=final_state.get("sub_questions"),
+            sub_answers=final_state.get("sub_answers"),
             error=final_state.get("error"),
         )
     

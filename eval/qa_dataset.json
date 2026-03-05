@@ -663,5 +663,167 @@
     "reference_articles": ["art. 8 RGPD"],
     "verdict_qa": "correct",
     "notes": "Question difficile et spécifique."
+  },
+  {
+	"id": "q43_aipd_obligation_methode_acteurs",
+	"question": "Dans quels cas une AIPD est-elle obligatoire, comment la réaliser, et quels acteurs doivent être impliqués ?",
+	"category": "methodologie",
+	"difficulty": "difficile",
+	"expected_answer_summary": "Une AIPD est obligatoire lorsqu’un traitement présente un risque élevé pour les droits et libertés des personnes (ex : surveillance systématique, données sensibles, évaluation automatisée). Elle doit suivre une méthodologie en plusieurs étapes : description du traitement, analyse de nécessité et proportionnalité, évaluation des risques, mesures de réduction des risques. Les acteurs impliqués incluent le responsable de traitement, le DPO, éventuellement le RSSI et les équipes métiers.",
+	"must_include": ["risque élevé"],
+	"must_include_any": {
+		"min_count": 2,
+		"items": [
+			"description du traitement",
+			"évaluation des risques",
+			"mesures de sécurité",
+			"dpo",
+			"responsable de traitement"
+			]
+		},
+	"must_not_include": [],
+	"expected_sources_keywords": [
+		"aipd",
+		"analyse d'impact",
+		"risque élevé",
+		"cnil"
+		],
+	"reference_articles": ["art. 35 RGPD"],
+	"verdict_qa": "composite",
+	"notes": "Question triple : obligation + méthode + acteurs."
+  },
+  {
+	"id": "q44_violation_donnees_delai_notification",
+	"question": "Que doit faire une organisation en cas de violation de données personnelles, dans quel délai doit-elle notifier la CNIL, et faut-il informer les personnes concernées ?",
+	"category": "procedure",
+	"difficulty": "moyen",
+	"expected_answer_summary": "En cas de violation de données personnelles, l’organisation doit analyser l’incident, documenter la violation et notifier l’autorité de contrôle dans un délai de 72 heures si un risque existe pour les droits et libertés des personnes. Si le risque est élevé, les personnes concernées doivent également être informées.",
+	"must_include": ["72 heures"],
+	"must_include_any": {
+		"min_count": 2,
+		"items": [
+			"notification",
+			"cnil",
+			"personnes concernées",
+			"risque élevé",
+			"violation de données"
+			]
+		},
+	"must_not_include": [],
+	"expected_sources_keywords": [
+		"violation de données",
+		"notification",
+		"72 heures",
+		"cnil"
+		],
+	"reference_articles": ["art. 33 RGPD", "art. 34 RGPD"],
+	"verdict_qa": "composite",
+	"notes": "Question triple : procédure + délai + information des personnes."
+  },
+  {
+	"id": "q45_dpo_obligation_missions",
+	"question": "Dans quels cas la désignation d’un DPO est-elle obligatoire, et quelles sont ses principales missions ?",
+	"category": "organisation",
+	"difficulty": "moyen",
+	"expected_answer_summary": "La désignation d’un DPO est obligatoire pour les autorités publiques, les organisations dont les activités principales impliquent un suivi régulier et systématique à grande échelle, ou le traitement à grande échelle de données sensibles. Le DPO conseille l’organisme sur le RGPD, contrôle la conformité, coopère avec l’autorité de contrôle et sert de point de contact.",
+	"must_include": ["dpo"],
+	"must_include_any": {
+		"min_count": 2,
+		"items": [
+			"autorité publique",
+			"grande échelle",
+			"données sensibles",
+			"conseiller",
+			"autorité de contrôle"
+			]
+	},
+	"must_not_include": [],
+	"expected_sources_keywords": [
+		"dpo",
+		"délégué protection données",
+		"missions"
+		],
+	"reference_articles": ["art. 37 RGPD", "art. 39 RGPD"],
+	"verdict_qa": "composite",
+	"notes": "Question double : obligation + missions."
+  },
+  {
+	"id": "q46_transfert_hors_ue_mecanismes",
+	"question": "Quelles sont les conditions pour transférer des données personnelles hors de l’Union européenne et quels mécanismes peuvent être utilisés pour encadrer ces transferts ?",
+	"category": "international",
+	"difficulty": "difficile",
+	"expected_answer_summary": "Les transferts de données hors UE sont autorisés si un niveau de protection adéquat est garanti. Cela peut se faire via une décision d’adéquation de la Commission européenne ou par des garanties appropriées comme les clauses contractuelles types, les règles d’entreprise contraignantes ou d’autres mécanismes prévus par le RGPD.",
+	"must_include": ["transfert"],
+	"must_include_any": {
+		"min_count": 2,
+		"items": [
+			"décision d’adéquation",
+			"clauses contractuelles types",
+			"garanties appropriées",
+			"pays tiers",
+			"bcr"
+			]
+	},
+	"must_not_include": [],
+	"expected_sources_keywords": [
+		"transfert international",
+		"clauses contractuelles types",
+		"pays tiers"
+		],
+	"reference_articles": ["art. 44 RGPD", "art. 46 RGPD"],
+	"verdict_qa": "composite",
+	"notes": "Question double : conditions + mécanismes."
+  },
+  {
+	"id": "q47_registre_traitements_contenu_obligation",
+	"question": "Qui doit tenir un registre des traitements et quelles informations doivent y figurer ?",
+	"category": "documentation",
+	"difficulty": "moyen",
+	"expected_answer_summary": "Le registre des traitements doit être tenu par le responsable de traitement et, dans certains cas, par le sous-traitant. Il doit contenir notamment les finalités du traitement, les catégories de données, les destinataires, les durées de conservation et les mesures de sécurité.",
+	"must_include": ["registre"],
+	"must_include_any": {
+		"min_count": 2,
+		"items": [
+			"finalités",
+			"catégories de données",
+			"destinataires",
+			"durée de conservation",
+			"responsable de traitement"
+			]
+		},
+	"must_not_include": [],
+	"expected_sources_keywords": [
+		"registre des traitements",
+		"documentation rgpd"
+		],
+	"reference_articles": ["art. 30 RGPD"],
+	"verdict_qa": "composite",
+	"notes": "Question double : obligation + contenu."
+  },
+  {
+	"id": "q48_sous_traitant_contrat_obligations",
+	"question": "Quelles obligations s’imposent à un sous-traitant au sens du RGPD et que doit contenir le contrat avec le responsable de traitement ?",
+	"category": "contractuel",
+	"difficulty": "difficile",
+	"expected_answer_summary": "Le sous-traitant doit traiter les données uniquement sur instruction du responsable de traitement, garantir la sécurité des données et respecter les obligations du RGPD. Le contrat doit notamment préciser l’objet et la durée du traitement, la nature des données, les obligations du sous-traitant et les mesures de sécurité.",
+	"must_include": ["sous-traitant"],
+	"must_include_any": {
+		"min_count": 2,
+		"items": [
+			"instruction du responsable",
+			"sécurité des données",
+			"contrat",
+			"durée du traitement",
+			"nature des données"
+			]
+		},
+	"must_not_include": [],
+	"expected_sources_keywords": [
+		"sous-traitant",
+		"contrat traitement données"
+		],
+	"reference_articles": ["art. 28 RGPD"],
+	"verdict_qa": "composite",
+	"notes": "Question double : obligations + contenu contractuel."
   }
 ]

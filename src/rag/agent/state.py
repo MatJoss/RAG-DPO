@@ -51,6 +51,7 @@ class RAGState(TypedDict, total=False):
     tool_results: Optional[Dict[str, Any]]  # Résultats des tools (articles, deadlines, etc.)
     completeness: Optional[Dict[str, Any]]  # Résultat du check de complétude
     sub_questions: Optional[List[str]]  # Question décomposée en sous-questions
+    sub_answers: Optional[List[str]]    # Réponses individuelles par sous-question (post-renumbering)
     
     # ── Timing ──
     start_time: float

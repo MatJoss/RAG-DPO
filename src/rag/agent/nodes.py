@@ -468,6 +468,9 @@ def make_generate_node(components: NodeComponents):
             answer_text = answer_text[:_src_section.start()].rstrip()
             logger.info(f"   🧹 Section Sources supprimée du texte généré")
         
+        # Strip tags [Pratique RGPD] résiduels (artefact de génération)
+        answer_text = re.sub(r'\s*\[Pratique RGPD\]', '', answer_text)
+        
         return {
             "answer": answer_text,
             "context_used": context,
@@ -1044,6 +1047,9 @@ def make_decompose_node(components: NodeComponents):
         if len(cleaned) < len(answer_text):
             logger.info(f"   🧹 Section Sources supprimée ({len(answer_text) - len(cleaned)} chars)")
             answer_text = cleaned
+        
+        # Strip tags [Pratique RGPD] résiduels (artefact de génération)
+        answer_text = re.sub(r'\s*\[Pratique RGPD\]', '', answer_text)
         
         # ── Parser la réponse en sous-réponses pour les expanders UI ──
         # On cherche les sections ### pour extraire chaque sous-réponse

@@ -1049,6 +1049,36 @@ def make_decompose_node(components: NodeComponents):
             if n_remapped > 0:
                 logger.info(f"   🔢 Sous-réponse {idx+1}: {n_remapped} source(s) renumérotée(s)")
         
+        # ── Compacter les IDs pour éliminer les trous ──
+        # Après renumbering, certaines sources globales ne sont citées nulle part
+        # (le LLM ne les a pas utilisées). Ça crée des trous (1,2,3,4,6 → source 5 absente).
+        # On réattribue des IDs séquentiels : citées d'abord (1..K), non-citées ensuite (K+1..N).
+        all_text = "\n".join(renumbered_answers)
+        cited_global_ids = sorted(set(int(s) for s in re.findall(r'\[Source\s+(\d+)\]', all_text)))
+        uncited_global_ids = [i for i in range(1, len(unique_documents) + 1) if i not in cited_global_ids]
+        
+        # Nouveau mapping : ancien global_id → nouveau global_id (séquentiel, sans trou)
+        compact_mapping = {}
+        new_idx = 1
+        for old_id in cited_global_ids:
+            compact_mapping[old_id] = new_idx
+            new_idx += 1
+        for old_id in uncited_global_ids:
+            compact_mapping[old_id] = new_idx
+            new_idx += 1
+        
+        # Appliquer le compactage seulement s'il y a des trous
+        has_gaps = any(old != new for old, new in compact_mapping.items())
+        if has_gaps:
+            renumbered_answers = [_renumber_sources(ans, compact_mapping) for ans in renumbered_answers]
+            # Réordonner les documents dans le même ordre
+            reordered_docs = [None] * len(unique_documents)
+            for old_id, new_id in compact_mapping.items():
+                reordered_docs[new_id - 1] = unique_documents[old_id - 1]
+            unique_documents = reordered_docs
+            n_compacted = sum(1 for o, n in compact_mapping.items() if o != n)
+            logger.info(f"   🔢 Compactage: {n_compacted} source(s) renumérotée(s), 0 trou")
+        
         # ── MERGE programmatique (0 appel LLM) ──
         logger.info(f"   📋 Fusion programmatique de {len(renumbered_answers)} sous-réponses (0 LLM)")
         

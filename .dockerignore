@@ -1,0 +1,40 @@
+# ── .dockerignore — Fichiers exclus de l'image Docker ────────────────────────
+# Ces fichiers ne sont PAS copiés dans l'image lors du `docker build`.
+# Les données persistent via les volumes (docker-compose.yml), pas dans l'image.
+
+# Environnement virtuel Python (l'image a le sien)
+venv/
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+
+# Données volumineuses (montées en volumes, pas copiées)
+data/
+models/
+logs/
+vectordb/
+cache/
+
+# Git
+.git/
+.gitignore
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Docker (éviter récursion)
+Dockerfile
+docker-compose.yml
+.dockerignore
+.env
+.env.*
+
+# Fichiers inutiles dans l'image
+*.md
+docs/
+eval/
+tasks/

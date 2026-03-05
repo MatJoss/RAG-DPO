@@ -23,9 +23,11 @@ from email.mime.multipart import MIMEMultipart
 from pathlib import Path
 from typing import Dict, List, Optional, Any
 
+from src.utils.paths import CONFIG_PATH as _CONFIG_PATH, LOGS_DIR as _LOGS_DIR
+
 logger = logging.getLogger(__name__)
 
-DEFAULT_CONFIG_PATH = Path(__file__).parent.parent.parent / "configs" / "config.yaml"
+DEFAULT_CONFIG_PATH = _CONFIG_PATH
 ALERT_LOG_FILE = "alerts.jsonl"
 
 
@@ -88,7 +90,7 @@ class Alerter:
     
     def __init__(self, config: Optional[Dict] = None, log_dir: Optional[Path] = None):
         self.config = config or load_alert_config()
-        self.log_dir = log_dir or (Path(__file__).parent.parent.parent / "logs")
+        self.log_dir = log_dir or _LOGS_DIR
         self.log_dir.mkdir(parents=True, exist_ok=True)
         self.alert_log_path = self.log_dir / ALERT_LOG_FILE
         self._last_check: Optional[datetime] = None

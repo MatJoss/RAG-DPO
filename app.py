@@ -16,6 +16,10 @@ project_root = Path(__file__).parent
 sys.path.insert(0, str(project_root / "src"))
 
 from src.utils.structured_logger import setup_structured_logging
+from src.utils.paths import (
+    PROJECT_ROOT, VECTORDB_DIR, HF_CACHE_DIR, LOGS_DIR, CONFIGS_DIR,
+    OLLAMA_BASE_URL, OLLAMA_MODEL, CHROMADB_COLLECTION,
+)
 
 # Structured logging — une seule fois
 if "logging_initialized" not in st.session_state:
@@ -47,20 +51,19 @@ def init_rag_system():
     from src.utils.alerter import Alerter, load_alert_config
 
     try:
-        vectordb_path = project_root / "data" / "vectordb" / "chromadb"
-        if not vectordb_path.exists():
-            st.error(f"❌ VectorDB introuvable : {vectordb_path}")
+        if not VECTORDB_DIR.exists():
+            st.error(f"❌ VectorDB introuvable : {VECTORDB_DIR}")
             st.stop()
 
-        client = chromadb.PersistentClient(path=str(vectordb_path))
-        collection = client.get_collection("rag_dpo_chunks")
+        client = chromadb.PersistentClient(path=str(VECTORDB_DIR))
+        collection = client.get_collection(CHROMADB_COLLECTION)
 
         llm_provider = OllamaProvider(
-            base_url="http://localhost:11434",
-            model="mistral-nemo"
+            base_url=OLLAMA_BASE_URL,
+            model=OLLAMA_MODEL,
         )
         embedding_provider = EmbeddingProvider(
-            cache_dir=str(project_root / "models" / "huggingface" / "hub"),
+            cache_dir=str(HF_CACHE_DIR),
         )
 
         # Pipeline natif (single-gen, intent-aware)
@@ -75,7 +78,7 @@ def init_rag_system():
             enable_dual_gen=False,  # Single-gen (intent classifier suffit)
             enable_summary_prefilter=True,
             enable_validation=True,
-            model="mistral-nemo",
+            model=OLLAMA_MODEL,
             temperature=0.0,
             debug_mode=False,
         )
@@ -91,7 +94,7 @@ def init_rag_system():
             enable_reranker=True,
             enable_summary_prefilter=True,
             enable_validation=True,
-            model="mistral-nemo",
+            model=OLLAMA_MODEL,
             temperature=0.0,
             max_retries=1,
         )

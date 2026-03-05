@@ -17,7 +17,9 @@ from pathlib import Path
 from typing import Optional
 
 
-DEFAULT_LOG_DIR = Path(__file__).parent.parent.parent / "logs"
+from src.utils.paths import LOGS_DIR
+
+DEFAULT_LOG_DIR = LOGS_DIR
 DEFAULT_LOG_FILE = "app.jsonl"
 MAX_LOG_SIZE_MB = 20  # Rotation après 20 MB
 

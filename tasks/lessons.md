@@ -273,3 +273,15 @@
 - **Règle ABSOLUE** : les exemples dans un prompt doivent être des exemples GÉNÉRIQUES illustrant une RÈGLE, jamais des cas spécifiques du dataset de test
 - **Pattern** : si tu veux améliorer un classifieur qui se trompe sur une question, reformule la RÈGLE pour couvrir le cas, ne copie-colle PAS la question
 - **Test** : demande-toi "est-ce que cet exemple serait utile si la question était différente ?" — si non, c'est du surapprentissage
+
+## Terminal PowerShell : TOUJOURS utiliser le venv explicitement
+- **Problème** : `python -c "..."` dans PowerShell utilise le Python système (ou échoue avec "Python est introuvable")
+- **Fix** : toujours utiliser `& venv\Scripts\python.exe` ou activer le venv avec `& venv\Scripts\Activate.ps1` d'abord
+- **Rappel** : pour du code complexe, créer un script dans `tasks/`, exécuter avec `& venv\Scripts\python.exe tasks\_script.py`, puis `Remove-Item`
+
+## Docker : centraliser les chemins dans un module paths.py
+- **Problème** : ~15 fichiers calculent `project_root = Path(__file__).parent.parent.parent` et hardcodent les chemins (`data/vectordb/chromadb`, `http://localhost:11434`, etc.)
+- **Impact** : impossible de faire tourner le même code en local ET dans Docker sans modifier le code
+- **Fix** : créer `src/utils/paths.py` qui lit `os.environ.get("VAR", default_local)` pour tous les chemins et URLs
+- **Pattern** : en local → pas de var d'env → défauts locaux. En Docker → `docker-compose.yml` injecte les vars → chemins Docker.
+- **Règle** : JAMAIS de `if docker:` dans le code. Un seul code, configuré par l'environnement.

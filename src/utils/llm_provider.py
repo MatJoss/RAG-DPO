@@ -34,10 +34,11 @@ class BaseLLMProvider(ABC):
 class OllamaProvider(BaseLLMProvider):
     """Provider local utilisant Ollama"""
     
-    def __init__(self, model: str = None, base_url: str = "http://localhost:11434", vision_model: str = "llava:7b"):
-        # Modèle depuis .env ou paramètre ou défaut
-        self.model = model or os.getenv('OLLAMA_MODEL', 'mistral-nemo')
-        self.base_url = base_url
+    def __init__(self, model: str = None, base_url: str = None, vision_model: str = "llava:7b"):
+        from src.utils.paths import OLLAMA_BASE_URL, OLLAMA_MODEL
+        # Modèle depuis paramètre ou paths.py (qui lit les env vars)
+        self.model = model or OLLAMA_MODEL
+        self.base_url = base_url or OLLAMA_BASE_URL
         self.vision_model = vision_model
         self.embedding_model = "nomic-embed-text"  # Modèle d'embeddings Ollama
         

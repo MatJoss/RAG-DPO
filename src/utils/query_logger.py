@@ -22,7 +22,8 @@ from typing import Dict, List, Optional, Any
 logger = logging.getLogger(__name__)
 
 # ── Constantes ───────────────────────────────────────────────
-DEFAULT_LOG_DIR = Path(__file__).parent.parent.parent / "logs"
+from src.utils.paths import LOGS_DIR
+DEFAULT_LOG_DIR = LOGS_DIR
 QUERIES_FILE = "queries.jsonl"
 FEEDBACK_FILE = "feedback.jsonl"
 MAX_LOG_SIZE_MB = 10  # Rotation après 10 MB

@@ -1,0 +1,96 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# docker-compose.yml — RAG-DPO Stack
+# ─────────────────────────────────────────────────────────────────────────────
+# Usage:
+#   docker compose up -d          # Lancer tout
+#   docker compose logs -f app    # Voir les logs de l'app
+#   docker compose down           # Arrêter tout (les données persistent)
+# ─────────────────────────────────────────────────────────────────────────────
+
+services:
+  # ── Ollama — LLM local (GPU) ─────────────────────────────────────────────
+  ollama:
+    image: ollama/ollama:latest
+    container_name: rag-dpo-ollama
+    restart: unless-stopped
+
+    # Accès GPU (ta RTX 4070 Ti)
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
+    volumes:
+      # Les modèles Ollama persistent ici — pas de re-téléchargement
+      - ollama_data:/root/.ollama
+
+    ports:
+      # Exposé aussi sur l'hôte pour debug (ollama list, etc.)
+      - "11434:11434"
+
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:11434/api/tags"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  # ── App Streamlit — Interface RAG (CPU) ──────────────────────────────────
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: rag-dpo-app
+    restart: unless-stopped
+
+    depends_on:
+      ollama:
+        condition: service_healthy
+
+    environment:
+      - OLLAMA_BASE_URL=http://ollama:11434
+      - OLLAMA_MODEL=${OLLAMA_MODEL:-mistral-nemo}
+      - PROJECT_ROOT=/app
+      - AUTO_DOWNLOAD_DB=${AUTO_DOWNLOAD_DB:-true}
+
+    volumes:
+      # ── Données persistantes ────────────────────────────────────────────
+      # ChromaDB — la base vectorielle (CRITIQUE, ne pas perdre)
+      - ./data/vectordb:/app/data/vectordb
+
+      # Modèles HuggingFace — cache BGE-M3 + reranker (~2 GB)
+      # Évite de re-télécharger à chaque rebuild
+      - ./models:/app/models
+
+      # Logs — queries, feedback, alertes, logs structurés
+      - ./logs:/app/logs
+
+      # Config — config.yaml + enterprise_tags.json
+      - ./configs:/app/configs
+
+      # Documents entreprise gardés (pour re-ingestion si besoin)
+      - ./data/keep:/app/data/keep
+
+      # Métadonnées (résumés, classifications)
+      - ./data/metadata:/app/data/metadata
+
+    ports:
+      - "${STREAMLIT_PORT:-8501}:8501"
+
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8501/_stcore/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+# ── Volumes nommés ─────────────────────────────────────────────────────────
+# ollama_data est un volume Docker nommé (géré par Docker, pas sur ton disque
+# directement). Pour les données de l'app, on utilise des bind mounts (dossiers
+# locaux montés) pour pouvoir les inspecter facilement depuis Windows.
+volumes:
+  ollama_data:
+    name: rag-dpo-ollama-data

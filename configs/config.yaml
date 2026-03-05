@@ -64,7 +64,7 @@ rag:
   # Cross-encoder reranking
   enable_reranker: true
   reranker_model: "jinaai/jina-reranker-v2-base-multilingual"  # 278M, MIRACL FR 54.83, 7× plus rapide que BGE
-  reranker_device: "cpu"        # CPU pour ne pas toucher au VRAM
+  reranker_device: "cuda"        # GPU — Jina v2 est petit (~278M), gain 2.5s → ~0.5s
   rerank_candidates: 40         # Candidats bruts (semantic+BM25) passés au reranker AVANT dédup document
   rerank_top_k: 10              # Chunks gardés après reranking
 

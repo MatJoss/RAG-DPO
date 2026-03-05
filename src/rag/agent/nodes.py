@@ -11,6 +11,7 @@ sans duplication de logique.
 import logging
 import re
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any, Dict, List, Optional
 
 from ..context_builder import ContextBuilder
@@ -916,63 +917,62 @@ def make_decompose_node(components: NodeComponents):
         # 5 chunks par sous-question = suffisant pour une réponse focalisée
         sub_top_k = min(components.rerank_top_k, 5)
         
-        # ── Exécuter retrieve+generate pour chaque sous-question ──
-        sub_answers = []          # Texte brut de chaque sous-réponse
-        sub_doc_lists = []        # Documents par sous-question (pour mapping sources)
-        total_retrieval_time = 0.0
-        total_generation_time = 0.0
+        # ── OPTIMISATION : Retrieval UNIQUE sur la question globale ──
+        # Au lieu de retrieve×N (N query expansions LLM = ~12s chacune),
+        # on fait UN SEUL retrieval sur la question complète (sujet identique).
+        # Les sous-questions partagent le même corpus thématique.
+        effective_filter = build_enterprise_where_filter(where_filter, enterprise_tags)
+        retrieval_start = time.time()
         
-        for i, sq in enumerate(sub_questions, 1):
-            logger.info(f"   📥 Sous-question {i}/{len(sub_questions)}: {sq[:80]}...")
+        # Récupérer un pool large pour couvrir tous les aspects
+        global_top_k = min(sub_top_k * len(sub_questions), components.rerank_top_k * 2)
+        
+        if components.reranker is not None:
+            raw_candidates = components.retriever.retrieve_candidates(
+                query=question,  # Question globale, pas les sous-questions
+                n_candidates=components.rerank_candidates,
+                where_filter=effective_filter,
+            )
             
-            # ── RETRIEVE pour cette sous-question ──
-            effective_filter = build_enterprise_where_filter(where_filter, enterprise_tags)
-            sq_retrieval_start = time.time()
-            
-            if components.reranker is not None:
-                raw_candidates = components.retriever.retrieve_candidates(
-                    query=sq,
-                    n_candidates=components.rerank_candidates,
-                    where_filter=effective_filter,
+            if raw_candidates:
+                ranked_chunks = components.reranker.rerank(
+                    query=question,
+                    chunks=raw_candidates,
+                    top_k=global_top_k,
                 )
-                
-                if raw_candidates:
-                    ranked_chunks = components.reranker.rerank(
-                        query=sq,
-                        chunks=raw_candidates,
-                        top_k=sub_top_k,
-                    )
-                    documents = _rebuild_documents_from_ranked_chunks(ranked_chunks)
-                else:
-                    documents = []
+                all_documents = _rebuild_documents_from_ranked_chunks(ranked_chunks)
             else:
-                documents = components.retriever.retrieve(
-                    query=sq,
-                    where_filter=effective_filter,
-                )
-            
-            sq_retrieval_time = time.time() - sq_retrieval_start
-            total_retrieval_time += sq_retrieval_time
-            
-            if not documents:
-                logger.warning(f"   ⚠️  Aucun document pour sous-question {i}")
-                sub_answers.append(f"Information non trouvée pour : {sq}")
-                sub_doc_lists.append([])
-                continue
-            
-            # Stocker les documents de cette sous-question (pour mapping sources)
-            sub_doc_lists.append(documents)
-            
-            # ── GENERATE pour cette sous-question ──
-            # Réutiliser l'intent global — reclassifier chaque sous-question
-            # gaspille ~5s par appel et peut dégrader le résultat
-            # (ex: "Qui contacter ?" classé "factuel" au lieu de garder le contexte méthodologique)
+                all_documents = []
+        else:
+            all_documents = components.retriever.retrieve(
+                query=question,
+                where_filter=effective_filter,
+            )
+        
+        total_retrieval_time = time.time() - retrieval_start
+        logger.info(f"   ✅ Retrieval unique: {len(all_documents)} docs en {total_retrieval_time:.1f}s")
+        
+        if not all_documents:
+            logger.warning(f"   ⚠️  Aucun document trouvé")
+            return {"sub_questions": None}
+        
+        # ── OPTIMISATION : Génération PARALLÈLE avec max_tokens réduit ──
+        # Chaque sous-réponse n'a pas besoin de 3000 tokens.
+        # 1000 tokens ≈ 200-300 mots, suffisant pour une réponse focalisée.
+        # Gain : ~35s → ~12s par sous-question, et parallèle ÷ latence par N.
+        SUB_MAX_TOKENS = 1000
+        
+        # Préparer les contextes pour chaque sous-question
+        # (partage le même pool de documents, chaque sous-question pose sa propre question)
+        def _generate_sub_answer(sq_idx_and_question):
+            """Génère une sous-réponse. Thread-safe car Ollama gère le queuing."""
+            sq_idx, sq = sq_idx_and_question
             
             context = components.context_builder.build_context(
-                documents=documents,
+                documents=all_documents,
                 question=sq,
                 conversation_history=conversation_history,
-                intent=intent,  # Intent global, pas de reclassification
+                intent=intent,
             )
             
             # Injecter tool_results si disponibles
@@ -995,69 +995,62 @@ def make_decompose_node(components: NodeComponents):
                     if available >= len(enrichment_block):
                         context["user"] = context["user"] + f"\n\n{enrichment_block}\n"
             
-            sq_gen_start = time.time()
+            gen_start = time.time()
             generated = components.generator.generate(
                 system_prompt=context["system"],
                 user_prompt=context["user"],
                 temperature=temperature,
+                max_tokens=SUB_MAX_TOKENS,
             )
-            sq_gen_time = time.time() - sq_gen_start
-            total_generation_time += sq_gen_time
+            gen_time = time.time() - gen_start
             
             if generated.error:
-                logger.warning(f"   ⚠️  Erreur génération sous-question {i}: {generated.error}")
-                sub_answers.append(f"Erreur pour : {sq}")
+                logger.warning(f"   ⚠️  Erreur génération sous-question {sq_idx}: {generated.error}")
+                return sq_idx, f"Erreur pour : {sq}", gen_time
             else:
-                logger.info(f"   ✅ Sous-réponse {i}: {len(generated.text)} chars en {sq_gen_time:.1f}s")
-                sub_answers.append(generated.text.strip())
+                logger.info(f"   ✅ Sous-réponse {sq_idx}: {len(generated.text)} chars en {gen_time:.1f}s")
+                return sq_idx, generated.text.strip(), gen_time
         
-        # ── Dédupliquer les documents → liste globale avec numérotation stable ──
-        seen_paths = {}    # document_path → global_index (1-based)
-        unique_documents = []
-        for doc_list in sub_doc_lists:
-            for doc in doc_list:
-                if doc.document_path not in seen_paths:
-                    unique_documents.append(doc)
-                    seen_paths[doc.document_path] = len(unique_documents)  # 1-based
+        # Lancer les générations en parallèle
+        # Note : Ollama sérialise les requêtes GPU en interne, mais le parallélisme
+        # permet de pipeliner la préparation des requêtes et de réduire la latence réseau.
+        # Sur un serveur Ollama avec OLLAMA_NUM_PARALLEL > 1, le gain est réel.
+        logger.info(f"   🚀 Génération parallèle de {len(sub_questions)} sous-réponses (max_tokens={SUB_MAX_TOKENS})")
         
-        # ── Construire le mapping local→global par sous-question ──
-        # Chaque sous-question a ses sources numérotées 1..N localement.
-        # On doit renommer [Source 1] → [Source X] dans la liste globale.
-        source_mappings = []  # [{local_id: global_id, ...}, ...]
-        for doc_list in sub_doc_lists:
-            mapping = {}
-            for local_idx, doc in enumerate(doc_list, 1):
-                mapping[local_idx] = seen_paths[doc.document_path]
-            source_mappings.append(mapping)
+        sub_answers = [""] * len(sub_questions)
+        total_generation_time = 0.0
         
-        # ── Renommer les [Source N] dans chaque sous-réponse ──
+        with ThreadPoolExecutor(max_workers=len(sub_questions)) as executor:
+            futures = {
+                executor.submit(_generate_sub_answer, (i, sq)): i
+                for i, sq in enumerate(sub_questions, 1)
+            }
+            for future in as_completed(futures):
+                sq_idx, answer_text, gen_time = future.result()
+                sub_answers[sq_idx - 1] = answer_text
+                total_generation_time = max(total_generation_time, gen_time)  # Wall-clock = max (parallèle)
+        
+        # Toutes les sous-questions partagent le même pool de documents
+        # → pas de mapping local→global nécessaire, les [Source N] sont déjà cohérents
+        unique_documents = all_documents
+        
+        # ── Compacter les IDs pour éliminer les trous ──
+        # Le LLM ne cite pas toujours toutes les sources du contexte.
+        # On réattribue des IDs séquentiels : citées d'abord (1..K), non-citées ensuite (K+1..N).
         def _renumber_sources(text: str, mapping: Dict[int, int]) -> str:
             """Remplace [Source local_id] par [Source global_id] dans le texte."""
             if not mapping:
                 return text
             def _replacer(m):
-                local_id = int(m.group(1))
-                global_id = mapping.get(local_id, local_id)
-                return f"[Source {global_id}]"
+                old_id = int(m.group(1))
+                new_id = mapping.get(old_id, old_id)
+                return f"[Source {new_id}]"
             return re.sub(r'\[Source\s+(\d+)\]', _replacer, text)
         
-        renumbered_answers = []
-        for idx, (ans, mapping) in enumerate(zip(sub_answers, source_mappings)):
-            renumbered = _renumber_sources(ans, mapping)
-            renumbered_answers.append(renumbered)
-            n_remapped = sum(1 for l, g in mapping.items() if l != g)
-            if n_remapped > 0:
-                logger.info(f"   🔢 Sous-réponse {idx+1}: {n_remapped} source(s) renumérotée(s)")
-        
-        # ── Compacter les IDs pour éliminer les trous ──
-        # Après renumbering, certaines sources globales ne sont citées nulle part
-        # (le LLM ne les a pas utilisées). Ça crée des trous (1,2,3,4,6 → source 5 absente).
-        # On réattribue des IDs séquentiels : citées d'abord (1..K), non-citées ensuite (K+1..N).
-        all_text = "\n".join(renumbered_answers)
+        all_text = "\n".join(sub_answers)
         cited_global_ids = sorted(set(int(s) for s in re.findall(r'\[Source\s+(\d+)\]', all_text)))
         uncited_global_ids = [i for i in range(1, len(unique_documents) + 1) if i not in cited_global_ids]
         
-        # Nouveau mapping : ancien global_id → nouveau global_id (séquentiel, sans trou)
         compact_mapping = {}
         new_idx = 1
         for old_id in cited_global_ids:
@@ -1067,11 +1060,9 @@ def make_decompose_node(components: NodeComponents):
             compact_mapping[old_id] = new_idx
             new_idx += 1
         
-        # Appliquer le compactage seulement s'il y a des trous
         has_gaps = any(old != new for old, new in compact_mapping.items())
         if has_gaps:
-            renumbered_answers = [_renumber_sources(ans, compact_mapping) for ans in renumbered_answers]
-            # Réordonner les documents dans le même ordre
+            sub_answers = [_renumber_sources(ans, compact_mapping) for ans in sub_answers]
             reordered_docs = [None] * len(unique_documents)
             for old_id, new_id in compact_mapping.items():
                 reordered_docs[new_id - 1] = unique_documents[old_id - 1]
@@ -1080,13 +1071,13 @@ def make_decompose_node(components: NodeComponents):
             logger.info(f"   🔢 Compactage: {n_compacted} source(s) renumérotée(s), 0 trou")
         
         # ── MERGE programmatique (0 appel LLM) ──
-        logger.info(f"   📋 Fusion programmatique de {len(renumbered_answers)} sous-réponses (0 LLM)")
+        logger.info(f"   📋 Fusion programmatique de {len(sub_answers)} sous-réponses (0 LLM)")
         
-        if len(renumbered_answers) == 1:
-            merged_answer = renumbered_answers[0]
+        if len(sub_answers) == 1:
+            merged_answer = sub_answers[0]
         else:
             sections = []
-            for i, (sq, ans) in enumerate(zip(sub_questions, renumbered_answers), 1):
+            for i, (sq, ans) in enumerate(zip(sub_questions, sub_answers), 1):
                 sections.append(f"### {sq}\n\n{ans}")
             merged_answer = "\n\n---\n\n".join(sections)
         
@@ -1105,7 +1096,7 @@ def make_decompose_node(components: NodeComponents):
         
         return {
             "sub_questions": sub_questions,
-            "sub_answers": renumbered_answers,
+            "sub_answers": sub_answers,
             "answer": merged_answer,
             "documents": unique_documents,
             "context_used": merged_context,

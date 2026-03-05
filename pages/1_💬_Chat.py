@@ -251,7 +251,16 @@ def main():
         with st.chat_message(message["role"]):
             if "timestamp" in message:
                 st.markdown(f'<div class="msg-time">{message["timestamp"]}</div>', unsafe_allow_html=True)
-            st.markdown(message["content"])
+            # Questions composites : expanders par sous-question
+            if (message.get("role") == "assistant"
+                    and message.get("sub_questions") and message.get("sub_answers")
+                    and len(message["sub_questions"]) > 1):
+                for i, (sq, sa) in enumerate(zip(message["sub_questions"], message["sub_answers"])):
+                    icon = "🔸" if i == 0 else "🔹"
+                    with st.expander(f"{icon} {sq}", expanded=(i == 0)):
+                        st.markdown(sa)
+            else:
+                st.markdown(message["content"])
             if message["role"] == "assistant" and "sources" in message:
                 render_sources_block(message["sources"])
                 if "answer_hash" in message:
@@ -330,11 +339,21 @@ def main():
 
                 # Affichage
                 st.markdown(f'<div class="msg-time">{resp_time}</div>', unsafe_allow_html=True)
-                st.markdown(response.answer)
+
+                has_sub = (hasattr(response, 'sub_questions') and response.sub_questions
+                           and len(response.sub_questions) > 1
+                           and hasattr(response, 'sub_answers') and response.sub_answers)
+
+                if has_sub:
+                    # Questions composites : 1 expander par sous-question
+                    for i, (sq, sa) in enumerate(zip(response.sub_questions, response.sub_answers)):
+                        icon = "🔸" if i == 0 else "🔹"
+                        with st.expander(f"{icon} {sq}", expanded=(i == 0)):
+                            st.markdown(sa)
+                else:
+                    st.markdown(response.answer)
 
                 decompose_info = ""
-                has_sub = (hasattr(response, 'sub_questions') and response.sub_questions
-                           and len(response.sub_questions) > 1)
                 if has_sub:
                     decompose_info = f" | 🔀 {len(response.sub_questions)} sous-questions"
 
@@ -346,25 +365,21 @@ def main():
                     f"{decompose_info}"
                 )
 
-                # Sous-réponses individuelles (si décomposition)
-                if has_sub and hasattr(response, 'sub_answers') and response.sub_answers:
-                    with st.expander(f"🔀 Voir les {len(response.sub_questions)} sous-réponses détaillées", expanded=False):
-                        for sq, sa in zip(response.sub_questions, response.sub_answers):
-                            st.markdown(f"**{sq}**")
-                            st.markdown(sa)
-                            st.markdown("---")
-
                 render_sources_block(response.sources)
 
                 # Persister en session_state
-                st.session_state.messages.append({
+                msg_data = {
                     "role": "assistant",
                     "content": response.answer,
                     "timestamp": resp_time,
                     "sources": response.sources,
                     "answer_hash": answer_hash,
                     "question": prompt,
-                })
+                }
+                if has_sub:
+                    msg_data["sub_questions"] = response.sub_questions
+                    msg_data["sub_answers"] = response.sub_answers
+                st.session_state.messages.append(msg_data)
                 st.session_state.conversation_history.append({
                     "role": "user", "content": prompt
                 })

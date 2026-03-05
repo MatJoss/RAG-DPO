@@ -1,0 +1,24 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# docker-compose.gpu.yml — Override GPU pour le container app
+# ─────────────────────────────────────────────────────────────────────────────
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.gpu.yml up -d
+#
+# Ce fichier override :
+#   1. Le Dockerfile utilisé (Dockerfile.cuda au lieu de Dockerfile)
+#   2. Ajoute l'accès GPU au container app (embeddings + reranker sur CUDA)
+# ─────────────────────────────────────────────────────────────────────────────
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile.cuda
+
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]

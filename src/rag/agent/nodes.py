@@ -964,7 +964,7 @@ def make_decompose_node(components: NodeComponents):
         # ── Génération UNIQUE avec sous-questions comme structure ──
         # Au lieu de N générations séparées (N × 35s), on fait 1 seule génération
         # où les sous-questions structurent le prompt → réponse cohérente, sans répétition.
-        COMPOSITE_MAX_TOKENS = 2000  # Budget pour la réponse complète structurée
+        COMPOSITE_MAX_TOKENS = 4096  # Budget généreux pour réponses détaillées
         
         # Construire le contexte avec la question globale
         context = components.context_builder.build_context(
@@ -1006,8 +1006,8 @@ def make_decompose_node(components: NodeComponents):
             "RÈGLES CRITIQUES :\n"
             "- Chaque section traite UNIQUEMENT son aspect spécifique\n"
             "- NE RÉPÈTE PAS la même information entre sections (ex: méthodologie AIPD = une seule fois)\n"
+            "- Chaque section doit être DÉTAILLÉE et COMPLÈTE, avec exemples concrets si pertinent\n"
             "- Chaque section cite ses sources [Source N] après chaque fait\n"
-            "- Réponse totale : 1500-2500 caractères maximum\n"
             "- Ne génère PAS de section 'Sources' ou 'Références' en fin de réponse"
         )
         

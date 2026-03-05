@@ -140,13 +140,32 @@ docker run --rm --gpus all ollama/ollama --version
 
 ```
 RAG-DPO/
-├── Dockerfile              # Recette pour construire l'image de l'app
-├── docker-compose.yml      # Orchestre Ollama + App + volumes
+├── Dockerfile              # Image CPU-only (embeddings sur CPU)
+├── Dockerfile.cuda         # Image GPU + flash-attn (embeddings + reranker sur CUDA)
+├── docker-compose.yml      # Orchestre Ollama + App (CPU)
+├── docker-compose.gpu.yml  # Override pour app GPU (flash-attn, CUDA embeddings)
 ├── .env.docker             # Variables d'env pour Docker
 ├── .env.example            # Template de configuration
 ├── .dockerignore           # Fichiers exclus du build
 └── src/utils/paths.py      # Chemins centralisés (env vars → défauts locaux)
 ```
+
+### Variante GPU pour l'app (flash-attn)
+
+Par défaut, le conteneur `app` tourne en **CPU-only** (suffisant, ~2s pour embeddings).
+Si tu as un GPU dédié aux embeddings/reranker, utilise la variante GPU :
+
+```bash
+# Lancer avec GPU + flash-attn pour l'app
+docker compose -f docker-compose.yml -f docker-compose.gpu.yml up -d
+
+# Rebuild si c'est la première fois
+docker compose -f docker-compose.yml -f docker-compose.gpu.yml up -d --build
+```
+
+> **⚠️ Le build de `flash-attn` prend ~10 min** (compilation C++/CUDA). L'image est ensuite cachée.
+>
+> **Note** : `flash-attn` ne fonctionne que sur Linux avec GPU NVIDIA (CUDA). C'est le cas dans Docker même sur un host Windows.
 
 ### Les 2 conteneurs
 

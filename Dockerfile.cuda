@@ -1,0 +1,62 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Dockerfile.cuda — RAG-DPO Streamlit App (GPU variant)
+# ─────────────────────────────────────────────────────────────────────────────
+# Variante GPU pour faire tourner embeddings + reranker sur CUDA.
+# Inclut flash-attn pour accélérer les modèles transformer (BGE-M3, reranker).
+#
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.gpu.yml up -d
+# ─────────────────────────────────────────────────────────────────────────────
+
+FROM python:3.11-slim AS base
+
+# Empêcher les prompts interactifs pendant l'install
+ENV DEBIAN_FRONTEND=noninteractive
+ENV PYTHONUNBUFFERED=1
+ENV PYTHONDONTWRITEBYTECODE=1
+
+# Dépendances système (build-essential + ninja pour flash-attn)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    curl \
+    git \
+    ninja-build \
+    && rm -rf /var/lib/apt/lists/*
+
+# ── Dossier de travail ───────────────────────────────────────────────────────
+WORKDIR /app
+
+# ── Dépendances Python (couche cachée si requirements.txt ne change pas) ────
+COPY requirements.txt .
+
+# Installer PyTorch avec CUDA 12.6 (~2 GB)
+RUN pip install --no-cache-dir torch==2.10.0 --index-url https://download.pytorch.org/whl/cu126
+
+# Installer le reste des dépendances
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Installer flash-attn (nécessite CUDA + torch GPU, compilation longue ~10 min)
+# --no-build-isolation car torch doit être visible pendant la compilation
+RUN pip install --no-cache-dir flash-attn --no-build-isolation
+
+# ── Code source ──────────────────────────────────────────────────────────────
+COPY . .
+
+# Rendre l'entrypoint exécutable
+RUN chmod +x /app/scripts/entrypoint.sh
+
+# ── Variables d'environnement par défaut ─────────────────────────────────────
+ENV OLLAMA_BASE_URL=http://ollama:11434
+ENV OLLAMA_MODEL=mistral-nemo
+ENV PROJECT_ROOT=/app
+ENV AUTO_DOWNLOAD_DB=true
+
+# ── Port Streamlit ───────────────────────────────────────────────────────────
+EXPOSE 8501
+
+# ── Healthcheck ──────────────────────────────────────────────────────────────
+HEALTHCHECK --interval=30s --timeout=10s --retries=3 \
+    CMD curl -f http://localhost:8501/_stcore/health || exit 1
+
+# ── Commande de lancement ────────────────────────────────────────────────────
+ENTRYPOINT ["/app/scripts/entrypoint.sh"]

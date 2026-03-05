@@ -29,8 +29,8 @@ COPY requirements.txt .
 
 # Installer PyTorch CPU-only d'abord (plus léger, ~200 MB au lieu de ~2 GB)
 # Note: si tu veux le GPU pour les embeddings aussi, remplace par:
-#   pip install torch --index-url https://download.pytorch.org/whl/cu124
-RUN pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu
+#   pip install torch==2.10.0 --index-url https://download.pytorch.org/whl/cu126
+RUN pip install --no-cache-dir torch==2.10.0 --index-url https://download.pytorch.org/whl/cpu
 
 # Installer le reste des dépendances
 RUN pip install --no-cache-dir -r requirements.txt

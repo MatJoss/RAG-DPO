@@ -206,10 +206,14 @@ def main():
 
     # Footer
     st.markdown("---")
-    st.caption(
-        "🔒 RAG-DPO Assistant — Sources CNIL + documents internes — "
-        "mistral-nemo 12B — 100% local"
-    )
+    col_footer_l, col_footer_r = st.columns([3, 1])
+    with col_footer_l:
+        st.caption(
+            "🔒 RAG-DPO Assistant — Sources CNIL + documents internes — "
+            "Mistral-Nemo 12B — 100% local"
+        )
+    with col_footer_r:
+        st.caption("Développé par **MatJoss** · [GitHub](https://github.com/MatJoss/RAG-DPO)")
 
 
 if __name__ == "__main__":

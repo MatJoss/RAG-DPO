@@ -1,55 +1,62 @@
-# Core
-requests>=2.31.0
-beautifulsoup4>=4.12.0
-lxml>=5.1.0
-scrapy>=2.11.0
-playwright>=1.40.0
+# =============================================================
+# RAG-DPO — Dépendances directes (versions pinnées)
+# Généré depuis l'environnement local fonctionnel (2026-03-05)
+# =============================================================
 
-# Document processing
-PyPDF2>=3.0.0
-python-docx>=1.1.0
-openpyxl>=3.1.0
-odfpy>=1.4.1
-pdfplumber>=0.10.0
-pymupdf>=1.23.0
+# --- Core / Scraping ---
+requests==2.32.5
+beautifulsoup4==4.14.3
+lxml==6.0.2
+scrapy==2.14.1
+playwright==1.57.0
 
-# OCR (optionnel, pour PDFs scannés)
-pytesseract>=0.3.10
+# --- Document processing ---
+PyPDF2==3.0.1
+python-docx==1.2.0
+openpyxl==3.1.5
+odfpy==1.4.1
+pdfplumber==0.11.9
+PyMuPDF==1.26.7
 
-# Images
-Pillow>=10.0.0
+# --- OCR (optionnel, pour PDFs scannés) ---
+pytesseract==0.3.13
 
-# Data
-pandas>=2.1.0
-numpy>=1.26.0
+# --- Images ---
+Pillow==12.1.0
 
-# RAG & LLM (local)
-chromadb>=0.5.0
-sentence-transformers>=2.3.0
-transformers>=4.40.0
-einops>=0.7.0
-ollama>=0.1.0
-rank_bm25>=0.2.2
+# --- Data ---
+pandas==2.3.3
+numpy==2.4.1
 
-# Agent
-langgraph>=1.0.0
-langchain-core>=1.0.0
+# --- RAG & LLM ---
+chromadb==1.4.1
+sentence-transformers==5.2.0
+transformers==4.57.6
+einops==0.8.2
+ollama==0.6.1
+rank-bm25==0.2.2
+FlagEmbedding==1.3.5
 
-# PyTorch — installer via https://pytorch.org/get-started/locally/
-# pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu126
-torch>=2.0.0
+# --- Agent ---
+langgraph==1.0.7
+langchain-core==1.2.7
 
-# Utils
-python-dotenv>=1.0.0
-pyyaml>=6.0.1
-tqdm>=4.66.0
-colorama>=0.4.6
-pydantic>=2.0.0
+# --- PyTorch ---
+# GPU (CUDA 12.6) : pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu126
+# CPU only (Docker) : pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
+torch==2.10.0
 
-# Interface
-streamlit>=1.29.0
+# --- Utils ---
+python-dotenv==1.2.1
+PyYAML==6.0.3
+tqdm==4.67.1
+colorama==0.4.6
+pydantic==2.12.5
 
-# Dev
-black>=23.12.0
-flake8>=7.0.0
-pytest>=7.4.0
+# --- Interface ---
+streamlit==1.53.1
+
+# --- Dev ---
+black==26.1.0
+flake8==7.3.0
+pytest==9.0.2

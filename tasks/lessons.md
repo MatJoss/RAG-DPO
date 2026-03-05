@@ -285,3 +285,17 @@
 - **Fix** : créer `src/utils/paths.py` qui lit `os.environ.get("VAR", default_local)` pour tous les chemins et URLs
 - **Pattern** : en local → pas de var d'env → défauts locaux. En Docker → `docker-compose.yml` injecte les vars → chemins Docker.
 - **Règle** : JAMAIS de `if docker:` dans le code. Un seul code, configuré par l'environnement.
+
+## Docker healthcheck : l'image ollama/ollama n'a ni curl ni wget
+- **Problème** : healthcheck `curl -f http://localhost:11434/api/tags` → fail car pas de curl dans l'image
+- **Fix** : utiliser `["CMD", "ollama", "list"]` — le seul binaire dispo dans l'image
+- **Règle** : toujours vérifier les outils disponibles dans une image tierce avant d'écrire un healthcheck
+
+## requirements.txt : TOUJOURS pinner les versions exactes (==) pour Docker
+- **Problème** : `transformers>=4.40.0` → Docker installe 5.3.0 → Jina reranker crash (`ImportError: cannot import name 'create_position_ids_from_input_ids'`)
+- **Cause** : `>=` sans borne supérieure permet à pip de prendre la dernière version, qui peut casser des dépendances inter-libs
+- **Impact** : l'app se lance mais crash au premier query — bug silencieux jusqu'à l'exécution
+- **Fix** : pinner TOUTES les dépendances directes avec `==version_exacte` depuis un env local fonctionnel (`pip freeze`)
+- **Règle** : ne garder que les dépendances **directes** (pas les 200+ transitives) mais toujours avec `==`
+- **Ne pas embarquer** : les sous-dépendances (aiohttp, urllib3, etc.) — pip les résout automatiquement
+- **Processus** : 1) `pip freeze` dans l'env qui marche, 2) croiser avec le requirements.txt existant, 3) ne garder que les directes avec `==`

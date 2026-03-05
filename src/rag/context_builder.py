@@ -80,7 +80,6 @@ STRUCTURE DE RÉPONSE OBLIGATOIRE :
    - Quoi (action concrète)
    - Livrable attendu
 3. **Points de vigilance** — risques, erreurs courantes
-4. **Références** — articles RGPD, guides CNIL cités
 
 STYLE :
 - Formate en Markdown : **gras**, listes numérotées, listes à puces

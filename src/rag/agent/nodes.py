@@ -11,7 +11,6 @@ sans duplication de logique.
 import logging
 import re
 import time
-from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any, Dict, List, Optional
 
 from ..context_builder import ContextBuilder
@@ -894,10 +893,13 @@ def make_decompose_node(components: NodeComponents):
     """Crée le nœud de décomposition de question composite.
     
     Détecte si la question couvre plusieurs aspects distincts.
-    Si oui : exécute retrieve+generate pour chaque sous-question,
-    puis fusionne les sous-réponses en une réponse complète.
-    
+    Si oui : retrieval unique + génération unique structurée par sous-questions.
     Si non : passe la question telle quelle au retrieve normal.
+    
+    Architecture (v2) :
+    - 1 retrieval sur la question globale (au lieu de N)
+    - 1 génération unique avec les sous-questions comme structure de prompt
+    - Résultat parsé en sections pour les expanders UI
     
     Position dans le graphe : enrich → **decompose** → retrieve (simple) ou respond (composite)
     """
@@ -923,24 +925,16 @@ def make_decompose_node(components: NodeComponents):
         
         logger.info(f"   → {len(sub_questions)} sous-questions détectées")
         
-        # Pour les questions composites, réduire le top_k par sous-question
-        # pour éviter l'explosion du contexte (N×10 chunks = trop)
-        # 5 chunks par sous-question = suffisant pour une réponse focalisée
-        sub_top_k = min(components.rerank_top_k, 5)
-        
-        # ── OPTIMISATION : Retrieval UNIQUE sur la question globale ──
-        # Au lieu de retrieve×N (N query expansions LLM = ~12s chacune),
-        # on fait UN SEUL retrieval sur la question complète (sujet identique).
-        # Les sous-questions partagent le même corpus thématique.
+        # ── Retrieval UNIQUE sur la question globale ──
         effective_filter = build_enterprise_where_filter(where_filter, enterprise_tags)
         retrieval_start = time.time()
         
-        # Récupérer un pool large pour couvrir tous les aspects
-        global_top_k = min(sub_top_k * len(sub_questions), components.rerank_top_k * 2)
+        # Pool large pour couvrir tous les aspects
+        global_top_k = min(components.rerank_top_k, 10)
         
         if components.reranker is not None:
             raw_candidates = components.retriever.retrieve_candidates(
-                query=question,  # Question globale, pas les sous-questions
+                query=question,
                 n_candidates=components.rerank_candidates,
                 where_filter=effective_filter,
             )
@@ -967,174 +961,185 @@ def make_decompose_node(components: NodeComponents):
             logger.warning(f"   ⚠️  Aucun document trouvé")
             return {"sub_questions": None}
         
-        # ── OPTIMISATION : Génération PARALLÈLE avec max_tokens réduit ──
-        # Chaque sous-réponse n'a pas besoin de 3000 tokens.
-        # 1000 tokens ≈ 200-300 mots, suffisant pour une réponse focalisée.
-        # Gain : ~35s → ~12s par sous-question, et parallèle ÷ latence par N.
-        SUB_MAX_TOKENS = 1000
+        # ── Génération UNIQUE avec sous-questions comme structure ──
+        # Au lieu de N générations séparées (N × 35s), on fait 1 seule génération
+        # où les sous-questions structurent le prompt → réponse cohérente, sans répétition.
+        COMPOSITE_MAX_TOKENS = 2000  # Budget pour la réponse complète structurée
         
-        # Préparer les contextes pour chaque sous-question
-        # (partage le même pool de documents, chaque sous-question pose sa propre question)
-        def _generate_sub_answer(sq_idx_and_question):
-            """Génère une sous-réponse. Thread-safe car Ollama gère le queuing."""
-            sq_idx, sq = sq_idx_and_question
-            
-            context = components.context_builder.build_context(
-                documents=all_documents,
-                question=sq,
-                conversation_history=conversation_history,
-                intent=intent,
-            )
-            
-            # Injecter tool_results si disponibles
-            if tool_results:
-                enrichment_lines = []
-                if "rgpd_articles" in tool_results:
-                    enrichment_lines.append("\n--- Références RGPD pertinentes ---")
-                    for art in tool_results["rgpd_articles"]:
-                        enrichment_lines.append(f"• {art['titre']} : {art['description']}")
-                if "deadlines" in tool_results:
-                    enrichment_lines.append("\n--- Délais réglementaires ---")
-                    for dl in tool_results["deadlines"]:
-                        enrichment_lines.append(
-                            f"• {dl['description']} : {dl['delai']} ({dl['article']})"
-                        )
-                if enrichment_lines:
-                    enrichment_block = "\n".join(enrichment_lines)
-                    max_len = components.context_builder.max_context_length
-                    available = max_len - len(context["user"]) - 50
-                    if available >= len(enrichment_block):
-                        context["user"] = context["user"] + f"\n\n{enrichment_block}\n"
-            
-            gen_start = time.time()
-            generated = components.generator.generate(
-                system_prompt=context["system"],
-                user_prompt=context["user"],
-                temperature=temperature,
-                max_tokens=SUB_MAX_TOKENS,
-            )
-            gen_time = time.time() - gen_start
-            
-            if generated.error:
-                logger.warning(f"   ⚠️  Erreur génération sous-question {sq_idx}: {generated.error}")
-                return sq_idx, f"Erreur pour : {sq}", gen_time
-            else:
-                logger.info(f"   ✅ Sous-réponse {sq_idx}: {len(generated.text)} chars en {gen_time:.1f}s")
-                return sq_idx, generated.text.strip(), gen_time
+        # Construire le contexte avec la question globale
+        context = components.context_builder.build_context(
+            documents=all_documents,
+            question=question,
+            conversation_history=conversation_history,
+            intent=intent,
+        )
         
-        # Lancer les générations en parallèle
-        # Note : Ollama sérialise les requêtes GPU en interne, mais le parallélisme
-        # permet de pipeliner la préparation des requêtes et de réduire la latence réseau.
-        # Sur un serveur Ollama avec OLLAMA_NUM_PARALLEL > 1, le gain est réel.
-        logger.info(f"   🚀 Génération parallèle de {len(sub_questions)} sous-réponses (max_tokens={SUB_MAX_TOKENS})")
+        # Injecter tool_results si disponibles
+        if tool_results:
+            enrichment_lines = []
+            if "rgpd_articles" in tool_results:
+                enrichment_lines.append("\n--- Références RGPD pertinentes ---")
+                for art in tool_results["rgpd_articles"]:
+                    enrichment_lines.append(f"• {art['titre']} : {art['description']}")
+            if "deadlines" in tool_results:
+                enrichment_lines.append("\n--- Délais réglementaires ---")
+                for dl in tool_results["deadlines"]:
+                    enrichment_lines.append(
+                        f"• {dl['description']} : {dl['delai']} ({dl['article']})"
+                    )
+            if enrichment_lines:
+                enrichment_block = "\n".join(enrichment_lines)
+                max_len = components.context_builder.max_context_length
+                available = max_len - len(context["user"]) - 50
+                if available >= len(enrichment_block):
+                    context["user"] = context["user"] + f"\n\n{enrichment_block}\n"
         
-        sub_answers = [""] * len(sub_questions)
-        total_generation_time = 0.0
+        # Construire l'instruction de structure multi-sections
+        sections_instruction = "\n".join(
+            f"### {i}. {sq}" for i, sq in enumerate(sub_questions, 1)
+        )
         
-        with ThreadPoolExecutor(max_workers=len(sub_questions)) as executor:
-            futures = {
-                executor.submit(_generate_sub_answer, (i, sq)): i
-                for i, sq in enumerate(sub_questions, 1)
-            }
-            for future in as_completed(futures):
-                sq_idx, answer_text, gen_time = future.result()
-                sub_answers[sq_idx - 1] = answer_text
-                total_generation_time = max(total_generation_time, gen_time)  # Wall-clock = max (parallèle)
+        composite_instruction = (
+            f"La question couvre {len(sub_questions)} aspects distincts. "
+            f"Structure ta réponse en {len(sub_questions)} sections Markdown avec EXACTEMENT ces titres :\n\n"
+            f"{sections_instruction}\n\n"
+            "RÈGLES CRITIQUES :\n"
+            "- Chaque section traite UNIQUEMENT son aspect spécifique\n"
+            "- NE RÉPÈTE PAS la même information entre sections (ex: méthodologie AIPD = une seule fois)\n"
+            "- Chaque section cite ses sources [Source N] après chaque fait\n"
+            "- Réponse totale : 1500-2500 caractères maximum\n"
+            "- Ne génère PAS de section 'Sources' ou 'Références' en fin de réponse"
+        )
         
-        # Toutes les sous-questions partagent le même pool de documents
-        # → pas de mapping local→global nécessaire, les [Source N] sont déjà cohérents
-        unique_documents = all_documents
+        # Remplacer la question et l'instruction dans le user prompt
+        context["user"] = context["user"].replace(
+            question,
+            f"{question}\n\n{composite_instruction}",
+        )
         
-        # ── Strip des sections "Sources" / "Références" en fin de sous-réponse ──
-        # Le LLM recopie parfois la sources_list du contexte en fin de réponse.
-        # Ça gaspille des tokens et fait doublon avec les sources affichées par l'UI.
+        logger.info(f"   🚀 Génération unique structurée ({len(sub_questions)} sections, max_tokens={COMPOSITE_MAX_TOKENS})")
+        
+        gen_start = time.time()
+        generated = components.generator.generate(
+            system_prompt=context["system"],
+            user_prompt=context["user"],
+            temperature=temperature,
+            max_tokens=COMPOSITE_MAX_TOKENS,
+        )
+        total_generation_time = time.time() - gen_start
+        
+        if generated.error:
+            logger.error(f"   ❌ Erreur génération composite: {generated.error}")
+            return {"sub_questions": None}
+        
+        answer_text = generated.text.strip()
+        logger.info(f"   ✅ Réponse composite: {len(answer_text)} chars en {total_generation_time:.1f}s")
+        
+        # ── Strip section "Sources" / "Références" en fin de réponse ──
         _sources_section_re = re.compile(
             r'\n\s*(?:Sources|Références|Liste des sources)\s*:\s*\n.*',
             re.DOTALL | re.IGNORECASE,
         )
-        for i, ans in enumerate(sub_answers):
-            cleaned = _sources_section_re.sub('', ans).rstrip()
-            if len(cleaned) < len(ans):
-                logger.info(f"   🧹 Sous-réponse {i+1}: section Sources supprimée ({len(ans) - len(cleaned)} chars)")
-            sub_answers[i] = cleaned
+        cleaned = _sources_section_re.sub('', answer_text).rstrip()
+        if len(cleaned) < len(answer_text):
+            logger.info(f"   🧹 Section Sources supprimée ({len(answer_text) - len(cleaned)} chars)")
+            answer_text = cleaned
         
-        # ── Compacter les IDs pour éliminer les trous ──
-        # Le LLM ne cite pas toujours toutes les sources du contexte.
-        # On réattribue des IDs séquentiels : citées d'abord (1..K), non-citées ensuite (K+1..N).
+        # ── Parser la réponse en sous-réponses pour les expanders UI ──
+        # On cherche les sections ### pour extraire chaque sous-réponse
+        sub_answers = _parse_sections(answer_text, sub_questions)
+        
+        # ── Compacter les IDs de sources ──
         def _renumber_sources(text: str, mapping: Dict[int, int]) -> str:
-            """Remplace [Source local_id] par [Source global_id] dans le texte."""
             if not mapping:
                 return text
             def _replacer(m):
                 old_id = int(m.group(1))
-                new_id = mapping.get(old_id, old_id)
-                return f"[Source {new_id}]"
+                return f"[Source {mapping.get(old_id, old_id)}]"
             return re.sub(r'\[Source\s+(\d+)\]', _replacer, text)
         
-        all_text = "\n".join(sub_answers)
-        cited_global_ids = sorted(set(int(s) for s in re.findall(r'\[Source\s+(\d+)\]', all_text)))
-        uncited_global_ids = [i for i in range(1, len(unique_documents) + 1) if i not in cited_global_ids]
+        unique_documents = all_documents
+        cited_ids = sorted(set(int(s) for s in re.findall(r'\[Source\s+(\d+)\]', answer_text)))
+        uncited_ids = [i for i in range(1, len(unique_documents) + 1) if i not in cited_ids]
         
         compact_mapping = {}
         new_idx = 1
-        for old_id in cited_global_ids:
+        for old_id in cited_ids:
             compact_mapping[old_id] = new_idx
             new_idx += 1
-        for old_id in uncited_global_ids:
+        for old_id in uncited_ids:
             compact_mapping[old_id] = new_idx
             new_idx += 1
         
         has_gaps = any(old != new for old, new in compact_mapping.items())
         if has_gaps:
-            sub_answers = [_renumber_sources(ans, compact_mapping) for ans in sub_answers]
-            reordered_docs = [None] * len(unique_documents)
+            answer_text = _renumber_sources(answer_text, compact_mapping)
+            sub_answers = [_renumber_sources(sa, compact_mapping) for sa in sub_answers]
+            reordered = [None] * len(unique_documents)
             for old_id, new_id in compact_mapping.items():
-                reordered_docs[new_id - 1] = unique_documents[old_id - 1]
-            unique_documents = reordered_docs
+                reordered[new_id - 1] = unique_documents[old_id - 1]
+            unique_documents = reordered
             n_compacted = sum(1 for o, n in compact_mapping.items() if o != n)
-            logger.info(f"   🔢 Compactage: {n_compacted} source(s) renumérotée(s), 0 trou")
+            logger.info(f"   🔢 Compactage: {n_compacted} source(s) renumérotée(s)")
         
-        # ── MERGE programmatique (0 appel LLM) ──
-        logger.info(f"   📋 Fusion programmatique de {len(sub_answers)} sous-réponses (0 LLM)")
-        
-        if len(sub_answers) == 1:
-            merged_answer = sub_answers[0]
-        else:
-            sections = []
-            for i, (sq, ans) in enumerate(zip(sub_questions, sub_answers), 1):
-                sections.append(f"### {sq}\n\n{ans}")
-            merged_answer = "\n\n---\n\n".join(sections)
-        
-        logger.info(f"   ✅ Fusion: {len(merged_answer)} chars")
-        
-        # ── Construire le context_used LÉGER pour les sources UI ──
-        # On NE reconstruit PAS via build_context() (risque Map-Reduce à 32K+).
-        # On construit directement les sources_metadata pour que respond/graph
-        # puisse afficher les sources dans l'UI.
+        # ── Construire sources_metadata pour l'UI ──
         sources_metadata = components.context_builder._extract_sources_metadata(unique_documents)
         merged_context = {
-            "system": "",  # Pas besoin pour la validation
-            "user": "",    # Pas besoin — les sous-réponses sont déjà générées
+            "system": "",
+            "user": "",
             "sources_metadata": sources_metadata,
         }
         
         return {
             "sub_questions": sub_questions,
             "sub_answers": sub_answers,
-            "answer": merged_answer,
+            "answer": answer_text,
             "documents": unique_documents,
             "context_used": merged_context,
             "retrieval_time": total_retrieval_time,
             "generation_time": total_generation_time,
             "model": components.generator.model,
-            # Skip validation : les sous-réponses ont été générées depuis de vrais chunks,
-            # le grounding est garanti par construction. Le validator ne peut pas fonctionner
-            # car il n'y a pas de contexte unifié à vérifier.
             "validation_passed": True,
-            "validation_reason": "Composite query — sub-answers grounded individually",
+            "validation_reason": "Composite — single generation with structured prompt",
         }
     
     return decompose
+
+
+def _parse_sections(text: str, sub_questions: List[str]) -> List[str]:
+    """Parse une réponse structurée en sections ### pour extraire les sous-réponses.
+    
+    Cherche les headers ### (numérotés ou non) et découpe le texte.
+    Fallback : si le parsing échoue, retourne la réponse complète pour chaque section.
+    """
+    # Trouver tous les headers ### dans le texte
+    header_pattern = re.compile(r'^###\s+', re.MULTILINE)
+    matches = list(header_pattern.finditer(text))
+    
+    if len(matches) < 2:
+        # Pas assez de sections trouvées → fallback
+        return [text] * len(sub_questions)
+    
+    # Extraire le contenu entre chaque header
+    sections = []
+    for i, match in enumerate(matches):
+        # Trouver la fin de la ligne du header
+        header_end = text.find('\n', match.start())
+        if header_end == -1:
+            header_end = len(text)
+        
+        # Contenu = entre fin du header et début du header suivant (ou fin du texte)
+        content_start = header_end + 1
+        content_end = matches[i + 1].start() if i + 1 < len(matches) else len(text)
+        content = text[content_start:content_end].strip()
+        sections.append(content)
+    
+    # Si on a plus de sections que de sous-questions, tronquer
+    # Si on en a moins, compléter avec des vides
+    while len(sections) < len(sub_questions):
+        sections.append("")
+    
+    return sections[:len(sub_questions)]
 
 
 def make_check_completeness_node(components: NodeComponents):

@@ -54,6 +54,7 @@ INTERDICTIONS :
 - Jamais de généralités non sourcées
 - Jamais inventer de numéro de source. JAMAIS écrire "[Source X]" littéralement.
 - Jamais de paraphrase redondante : ne reformule pas ce que tu viens de dire
+- Ne JAMAIS ajouter de section "Sources", "Références" ou "Liste des sources" en fin de réponse — les sources sont affichées séparément.
 """
 
     # ── Prompts adaptatifs selon l'intent ──
@@ -92,6 +93,7 @@ INTERDICTIONS :
 - Jamais écrire "[Source X]" — utilise le VRAI numéro : [Source 1], [Source 2], etc.
 - Jamais inventer de numéro de source inexistant
 - Jamais mélanger OBLIGATION LÉGALE et BONNE PRATIQUE sans le signaler
+- Ne JAMAIS ajouter de section "Sources", "Références" ou "Liste des sources" en fin de réponse — les sources sont affichées séparément.
 """
 
     SYSTEM_PROMPT_ORGANISATIONNEL = """Tu es un assistant expert RGPD spécialisé dans l'accompagnement des DPO (Délégués à la Protection des Données). Tu structures les **rôles, responsabilités et processus internes**.
@@ -117,6 +119,7 @@ RÈGLES :
 - Markdown, **gras**, listes
 - 200-400 mots
 - Jamais inventer de source, jamais de paraphrase redondante
+- Ne JAMAIS ajouter de section "Sources" ou "Références" en fin de réponse.
 """
 
     SYSTEM_PROMPT_CAS_PRATIQUE = """Tu es un assistant expert RGPD spécialisé dans l'accompagnement des DPO (Délégués à la Protection des Données). Tu analyses des **cas pratiques** de manière structurée.
@@ -138,6 +141,7 @@ RÈGLES :
 - Markdown, **gras**, listes
 - 200-400 mots
 - Jamais inventer de fait juridique
+- Ne JAMAIS ajouter de section "Sources" ou "Références" en fin de réponse.
 """
 
     SYSTEM_PROMPT_COMPARAISON = """Tu es un assistant expert RGPD spécialisé dans l'accompagnement des DPO (Délégués à la Protection des Données). Tu compares des **concepts, régimes ou options** de manière structurée.
@@ -156,6 +160,7 @@ RÈGLES :
 - Utilise des tableaux Markdown si pertinent
 - 200-400 mots
 - Jamais inventer de source
+- Ne JAMAIS ajouter de section "Sources" ou "Références" en fin de réponse.
 """
 
     SYSTEM_PROMPT_LISTE = """Tu es un assistant expert RGPD spécialisé dans l'accompagnement des DPO (Délégués à la Protection des Données). Tu fournis des **listes exhaustives et détaillées**.
@@ -181,6 +186,7 @@ INTERDICTIONS :
 - Jamais de "contactez la CNIL" si l'info est dans les sources
 - Jamais d'invention de source
 - Jamais de liste tronquée sans le signaler
+- Ne JAMAIS ajouter de section "Sources" ou "Références" en fin de réponse.
 """
 
     SYSTEM_PROMPT_REFUS = """Tu es un assistant expert RGPD spécialisé dans l'accompagnement des DPO (Délégués à la Protection des Données).

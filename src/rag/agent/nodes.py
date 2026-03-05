@@ -458,8 +458,19 @@ def make_generate_node(components: NodeComponents):
         
         logger.info(f"   ✅ Réponse: {len(generated.text)} chars en {generation_time:.2f}s")
         
+        # Strip section "Sources" / "Références" si le LLM en ajoute une
+        # (les sources sont affichées par l'UI, pas besoin de les répéter dans le texte)
+        answer_text = generated.text.strip()
+        _src_section = re.search(
+            r'\n\s*(?:Sources|Références|Liste des sources)\s*:\s*\n',
+            answer_text, re.IGNORECASE,
+        )
+        if _src_section:
+            answer_text = answer_text[:_src_section.start()].rstrip()
+            logger.info(f"   🧹 Section Sources supprimée du texte généré")
+        
         return {
-            "answer": generated.text.strip(),
+            "answer": answer_text,
             "context_used": context,
             "generation_time": generation_time,
             "model": generated.model,
@@ -1033,6 +1044,19 @@ def make_decompose_node(components: NodeComponents):
         # Toutes les sous-questions partagent le même pool de documents
         # → pas de mapping local→global nécessaire, les [Source N] sont déjà cohérents
         unique_documents = all_documents
+        
+        # ── Strip des sections "Sources" / "Références" en fin de sous-réponse ──
+        # Le LLM recopie parfois la sources_list du contexte en fin de réponse.
+        # Ça gaspille des tokens et fait doublon avec les sources affichées par l'UI.
+        _sources_section_re = re.compile(
+            r'\n\s*(?:Sources|Références|Liste des sources)\s*:\s*\n.*',
+            re.DOTALL | re.IGNORECASE,
+        )
+        for i, ans in enumerate(sub_answers):
+            cleaned = _sources_section_re.sub('', ans).rstrip()
+            if len(cleaned) < len(ans):
+                logger.info(f"   🧹 Sous-réponse {i+1}: section Sources supprimée ({len(ans) - len(cleaned)} chars)")
+            sub_answers[i] = cleaned
         
         # ── Compacter les IDs pour éliminer les trous ──
         # Le LLM ne cite pas toujours toutes les sources du contexte.

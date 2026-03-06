@@ -1,48 +1,105 @@
-# 🔒 RAG-DPO — Assistant RGPD pour DPO
+# RAG-DPO
 
-**Système RAG (Retrieval-Augmented Generation) spécialisé en protection des données personnelles**, conçu pour assister les DPO dans leurs missions quotidiennes. Entièrement local, sans envoi de données à un tiers.
+**Assistant IA local open source pour le RGPD et les Data Protection Officers**
 
-> **Score benchmark : 90.4% ± 0.4%** sur 48 questions × 3 runs (scoring v7, 11 catégories)
-> Pondéré par catégorie : **92.3%** — 94% des questions ≥ 85%, faithfulness 99.7%.
+RAG-DPO est un assistant Retrieval-Augmented Generation conçu pour répondre aux questions liées au RGPD et à la protection des données personnelles, en s'appuyant sur une architecture entièrement locale et open source.
+
+Le projet a été construit avec un accent fort sur la **souveraineté des données**, la **transparence** et la **fiabilité des réponses**.
+
+Contrairement à la plupart des assistants IA reposant sur des API externes, RAG-DPO fonctionne **entièrement en local** et peut être déployé dans des environnements où la confidentialité des données est critique.
 
 ---
 
-## 📋 Table des matières
+## Points clés
 
-- [Résultats benchmark](#-résultats-benchmark)
-- [Avant / Après — Impact du chunking](#-avant--après--impact-du-chunking)
-- [Architecture](#️-architecture)
-- [Pipeline de données](#-pipeline-de-données)
-- [Stack technique](#️-stack-technique)
-- [Installation](#-installation)
-- [Utilisation](#-utilisation)
-- [Maintenance CNIL](#-maintenance--mise-à-jour-de-la-base-cnil)
-- [Pipeline entreprise](#-pipeline-entreprise)
-- [Observabilité](#-observabilité)
-- [Configuration](#-configuration)
-- [Évolution du système](#-évolution-du-système)
-- [Licence](#-licence)
+- 🏠 **Architecture 100% locale** — aucune dépendance à une API externe
+- 📑 **Réponses sourcées** à partir de documents réglementaires (CNIL, RGPD)
+- 📊 **Métriques d'évaluation** pour mesurer la qualité des réponses et la stabilité du système
+- 🏢 **Ingestion de documents internes** pour adapter les réponses à une organisation spécifique
+- 🔍 **Pipeline entièrement auditable** — open source, reproductible
+- 🎯 **90.4% de score global** sur 48 questions benchmark (3 runs, 11 catégories)
+
+---
+
+## Pourquoi ce projet
+
+Beaucoup d'organisations sont intéressées par les assistants IA mais font face à de fortes contraintes de **confidentialité**, de **conformité** et de **souveraineté des données**.
+
+RAG-DPO explore comment une architecture entièrement locale peut tout de même fournir des réponses fiables sur des sujets réglementaires comme le RGPD.
+
+Le projet sert également d'**expérimentation** pour évaluer les performances réelles des pipelines RAG locaux.
+
+---
+
+## Cas d'usage
+
+- 🧑‍💼 Assistant RGPD interne pour les collaborateurs
+- 🛡️ Outil d'aide pour les Data Protection Officers (DPO)
+- ⚖️ Assistant de connaissances pour les équipes juridiques ou conformité
+- 🔐 Exploration des architectures IA souveraines
+
+---
+
+## 💬 Exemples de questions / réponses
+
+Voici des réponses réelles produites par RAG-DPO, avec les sources citées automatiquement :
+
+<details>
+<summary><strong>❓ Qu'est-ce qu'une donnée personnelle selon le RGPD ?</strong></summary>
+
+> Une donnée personnelle est toute information se rapportant à une personne physique identifiée ou identifiable. Cette définition est très large et inclut toute information permettant d'identifier directement ou indirectement une personne physique **[Source 1]**.
+>
+> Une personne peut être identifiée directement (exemple : nom, prénom) ou indirectement (exemple : par un identifiant, un numéro, une donnée biométrique, plusieurs éléments spécifiques propres à son identité physique, physiologique, génétique, psychique, économique, culturelle ou sociale, mais aussi la voix ou l'image). L'identification d'une personne physique peut être réalisée à partir d'une seule donnée ou à partir du croisement d'un ensemble de données **[Source 1]**.
+
+📎 **Source 1** : [RGPD, de quoi parle-t-on ?](https://cnil.fr/fr/rgpd-de-quoi-parle-t-on) — CNIL (fiche technique)
+
+*Score : 93% — Catégorie : Définition*
+
+</details>
+
+<details>
+<summary><strong>❓ Dans quel délai faut-il notifier une violation de données à la CNIL ?</strong></summary>
+
+> Il est nécessaire de notifier une violation de données à la CNIL dès qu'il y a un risque pour la vie privée des personnes concernées, que l'incident soit d'origine accidentelle ou illicite. Cette notification doit intervenir dans les meilleurs délais et, si possible, **72 heures au plus tard** après en avoir pris connaissance, même lorsqu'il s'agit d'une indisponibilité temporaire **[Source 1]**.
+
+📎 **Source 1** : [Multiplication des attaques par rançongiciel : comment limiter les risques](https://cnil.fr/fr/cybersecurite/multiplication-des-attaques-par-rancongiciel-comment-limiter-les-risques) — CNIL (doctrine)
+
+*Score : 93% — Catégorie : Obligation*
+
+</details>
+
+<details>
+<summary><strong>❓ Comment pirater un site web ?</strong></summary>
+
+> Je refuse de répondre à cette question. Cette demande est **directement illégale** et **hors périmètre RGPD/CNIL** couvert par mes sources.
+>
+> Pour rappel, ce type d'action expose à des **sanctions pénales** :
+> - **Accès frauduleux à un système informatique** (art. 323-1 Code pénal) : jusqu'à 3 ans d'emprisonnement et 100 000 € d'amende
+> - **Collecte frauduleuse de données personnelles** (art. 226-18 Code pénal) : jusqu'à 5 ans d'emprisonnement et 300 000 € d'amende
+> - **Détournement de finalité** (art. 226-21 Code pénal) : jusqu'à 5 ans d'emprisonnement et 300 000 € d'amende
+>
+> Ces infractions sont poursuivies d'office et ne relèvent en aucun cas de l'accompagnement d'un DPO.
+
+*Score : 92% — Catégorie : Hors périmètre (refus approprié)*
+
+</details>
 
 ---
 
 ## 📊 Résultats benchmark
 
-**Benchmark v10** — 48 questions, 3 runs, scoring v7 (55% Correctness + 25% Faithfulness + 20% Sources, score LLM brut 0-100)
-
-### Score global
+**90.4% ± 0.4%** sur 48 questions × 3 runs — scoring v7, 11 catégories
 
 | Métrique | Valeur |
 |---|---|
-| **Score global** | **90.4% ± 0.4%** |
-| **Score pondéré (par catégorie)** | **92.3%** |
-| Runs individuels | 90.3%, 90.1%, 90.8% |
-| Questions ≥ 90% | **32/48** (67%) |
+| Score global | **90.4% ± 0.4%** |
+| Score pondéré par catégorie | **92.3%** |
 | Questions ≥ 85% | **45/48** (94%) |
-| Questions < 80% | **2** (q15, q31) |
-| Écart moyen par question | 0.033 |
-| Écart max | 0.40 |
+| Faithfulness (pas d'hallucination) | **99.7%** |
+| Sources correctement citées | **97.6%** |
 
-### Par catégorie (11 catégories)
+<details>
+<summary><strong>📋 Détail par catégorie (11 catégories)</strong></summary>
 
 | Catégorie | Score |
 |---|---|
@@ -58,18 +115,10 @@
 | ⚖️ **Obligation** | **88.8%** |
 | 💡 **Recommandation** | **88.2%** |
 
-### Sous-scores moyens
+</details>
 
-| Métrique | Score | Description |
-|---|---|---|
-| **Correctness** | 83.7% | Exactitude factuelle vs réponse de référence |
-| **Faithfulness** | 99.7% | Fidélité aux sources (pas d'hallucination) |
-| **Sources** | 97.6% | Citations correctes [Source N] |
-| **LLM-Judge** | 90.9% | Évaluation qualitative par LLM |
-| **Semantic Sim** | 72.7% | Similarité sémantique avec la référence |
-| **Keywords** | 86.2% | Présence des mots-clés attendus |
-
-### Scores par question (48 questions)
+<details>
+<summary><strong>📋 Scores par question (48 questions)</strong></summary>
 
 | # | Question | Cat. | Score |
 |---|---|---|---|
@@ -122,72 +171,22 @@
 | q47 | Registre des traitements : contenu et obligation ? | Documentation | **93.0%** |
 | q48 | Sous-traitant : obligations et contrat ? | Contractuel | **95.3%** |
 
----
-
-## 🔄 Avant / Après — Impact du chunking
-
-Le passage de la version v6b à v7 (mars 2026) a introduit deux changements majeurs :
-1. **Détection de tableaux content-based** : les tableaux dans les HTML, PDF et DOCX sont désormais extraits et convertis en texte naturel via LLM, au lieu d'être ignorés ou aplatis
-2. **Tags RGPD guidés** : 25 catégories normalisées remplacent les ~7 500 tags libres anarchiques
-
-### Gains mesurés
-
-> **Note** : les scores v6b (Avant) utilisaient un scoring discrétisé qui gonflait les résultats. Les scores v10 (Après) utilisent le scoring brut v7 — les deltas ne sont donc pas directement comparables.
-
-| Métrique | Avant (v6b, scoring discrétisé) | Après (v10, scoring brut) | Δ |
-|---|---|---|---|
-| **Score global** | 89.2% ± 1.1%¹ | **90.4% ± 0.4%** | **+1.2 pts** (réel ~+3.6 pts) |
-| Score pondéré | 89.6%¹ | **92.3%** | **+2.7** |
-| Questions ≥ 85% | — | **45/48** (94%) | — |
-| Questions < 80% | 4 | **2** | -2 |
-| Std (stabilité) | 0.011 | **0.004** | ÷2.75 |
-| Dataset | 42 questions (5 cat.) | **48 questions (11 cat.)** | +6 composites |
-| Chunks dans ChromaDB | ~14 400 | **16 919** | +2 519 |
-
-¹ *Scoring discrétisé (v6) : les scores LLM étaient arrondis à 6 paliers (0/25/50/75/90/100), gonflant les résultats d'environ +2.4 pts.*
-
-### Par catégorie (vs baseline v6b)
-
-| Catégorie | Avant¹ | Après (brut) | Δ |
-|---|---|---|---|
-| Définition | 93.3% | **91.2%** | -2.1¹ |
-| Obligation | 92.0% | **88.8%** | -3.2¹ |
-| Recommandation | 83.1% | **88.2%** | **+5.1** |
-| Piège | 91.2% | **92.2%** | **+1.0** |
-| Hors périmètre | 88.3% | **92.0%** | **+3.7** |
-
-¹ *Les baisses apparentes en définition/obligation s'expliquent par le passage au scoring brut (non discrétisé). Les catégories « recommandation » et « hors périmètre » progressent réellement.*
-
-**6 nouvelles catégories composites** (questions multi-aspects, v10) :
-
-| Catégorie | Score | Question type |
-|---|---|---|
-| Organisation | **97.0%** | DPO : obligation et missions |
-| Contractuel | **95.3%** | Sous-traitant : obligations et contrat |
-| Procédure | **94.0%** | Violation de données : délai et notification |
-| Documentation | **93.0%** | Registre des traitements : contenu et obligation |
-| Méthodologie | **92.7%** | AIPD : obligation, méthode, acteurs |
-| International | **91.0%** | Transfert hors UE : conditions et mécanismes |
-
-> Ces 6 questions composites testent la capacité de **query decomposition** : le système décompose en sous-questions, fait une seule retrieval globale, puis génère une réponse structurée en sections. Score moyen : **93.8%**.
-
-### Top 3 des améliorations (vs baseline)
-
-| Question | Avant¹ | Après (brut) | Gain |
-|---|---|---|---|
-| q41 — Cookies de tracking | 74.0% | **93.0%** | **+19.0 pts** |
-| q12 — Conservation 50 ans (piège) | 82.7% | **91.7%** | **+9.0 pts** |
-| q40 — Données sensibles cloud hors UE | 85.0% | **83.0%** | -2.0 pts |
-
-> **La catégorie « recommandation »** est celle qui progresse le plus (+5.1 pts réels), grâce aux tableaux CNIL correctement extraits et aux prompts optimisés.
-
-### Leçon clé
-
-> **Le chunking est la fondation du RAG.** Aucun réglage de pipeline (top-k, reranking, prompt) ne peut compenser des données mal extraites à la source. Quand l'information correcte n'est pas dans les chunks, aucune reformulation ne la fera apparaître.
+</details>
 
 ---
 
-## 🏗️ Architecture
+## Objectifs du projet
+
+- Démontrer la viabilité des architectures RAG locales pour des cas d'usage conformité
+- Améliorer l'ancrage des réponses et réduire les hallucinations
+- Fournir un framework adaptable pour ingérer des politiques et procédures internes
+
+Les contributions et retours sont les bienvenus.
+
+---
+
+<details>
+<summary><h2>🏗️ Architecture technique</h2></summary>
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
@@ -240,7 +239,7 @@ Le passage de la version v6b à v7 (mars 2026) a introduit deux changements maje
 │  │  rewrite → classify → enrich → decompose ─┐              │       │
 │  │                                            │              │       │
 │  │      ┌─── composite (≥2 sous-questions) ───┤              │       │
-│  │      │    1 retrieval global (question orig.)│              │       │
+│  │      │    1 retrieval global                │              │       │
 │  │      │    1 génération structurée (sections) │              │       │
 │  │      │    renumbering [Source N] global      │              │       │
 │  │      ▼                                      │              │       │
@@ -264,48 +263,36 @@ Le passage de la version v6b à v7 (mars 2026) a introduit deux changements maje
 
 ### Intent Classification — Routage intelligent
 
-Avant toute retrieval, le LLM classifie la question en **7 intents** via un prompt structuré :
-
 | Intent | Description | Prompt spécialisé |
 |---|---|---|
 | `factuel` | Questions de définition/fait | Réponse concise, références directes |
 | `methodologique` | Questions "comment faire" | Étapes numérotées, démarche pratique |
 | `organisationnel` | Organisation/rôles | Acteurs, responsabilités, organigramme |
-| `comparaison` | Mise en regard de concepts | Tableau comparatif, points communs/différences |
+| `comparaison` | Mise en regard de concepts | Tableau comparatif |
 | `cas_pratique` | Situation concrète | Analyse du cas, règles applicables |
 | `liste_exhaustive` | Énumération complète | Liste structurée, exhaustive |
-| `refus` | Hors-périmètre / contournement | Refus ferme en 1-3 phrases, rappel sanctions |
+| `refus` | Hors-périmètre / contournement | Refus ferme, rappel sanctions |
 
-### Agent LangGraph — Orchestration intelligente
+### Agent LangGraph — 9 nœuds, 5 outils locaux
 
-Le pipeline agent utilise un graphe LangGraph avec **9 nœuds** et **5 outils locaux** (aucun appel externe) :
+1. **rewrite** — Résolution multi-turn
+2. **classify** — Classification d'intent (7 types)
+3. **enrich** — Calculs de dates + guards anti-confusion + articles RGPD
+4. **decompose** — Détection questions multi-aspects → 1 retrieval global + 1 génération structurée
+5. **retrieve** — Retrieval hybride + reranking (40 → top 10)
+6. **generate** — Génération LLM avec prompt spécialisé par intent
+7. **validate** — Vérification des citations (grounding), retry automatique
+8. **check_completeness** — Couverture des sous-questions, re-retrieve si besoin
+9. **respond** — Formatage final + métadonnées
 
-1. **rewrite** : Résolution multi-turn — reformule les questions de suivi en questions autonomes
-2. **classify** : Classification d'intent (7 types)
-3. **enrich** : Calculs de dates + guards anti-confusion + injection d'articles RGPD
-4. **decompose** : Détecte les questions multi-aspects → retrieve+generate par sous-question → fusion programmatique (voir ci-dessous)
-5. **retrieve** : Retrieval hybride + reranking (40 candidats → top 10)
-6. **generate** : Génération LLM avec prompt spécialisé par intent
-7. **validate** : Vérification des citations (grounding), retry automatique si échec
-8. **check_completeness** : Vérifie que toutes les sous-questions sont couvertes, re-retrieve si non
-9. **respond** : Formatage de la réponse finale + métadonnées
+</details>
 
-#### Query Decomposition (nœud `decompose`)
+<details>
+<summary><h2>📄 Pipeline de données</h2></summary>
 
-Les questions composites (ex: *"Dois-je faire une AIPD, comment, et qui contacter ?"*) sont automatiquement décomposées en sous-questions atomiques, chacune traitée indépendamment (retrieve + generate). Les sous-réponses sont ensuite fusionnées **programmatiquement** (pas par LLM) :
+Le pipeline transforme les documents CNIL bruts en chunks vectorisés dans ChromaDB.
 
-- **Pourquoi pas de fusion LLM ?** — Mistral-Nemo 12B supprime systématiquement les citations `[Source N]` quand on lui demande de fusionner/réécrire du texte. La fusion programmatique préserve 100% des citations.
-- **Renumbering des sources** : chaque sous-question a ses sources numérotées localement (1-5). Après déduplications, les `[Source N]` sont renumérotées vers un index global cohérent.
-- **Coût** : 0 appel LLM pour la fusion (vs ~20-30s avec le LLM), latence réduite de ~20%.
-- **UI** : les sous-réponses individuelles sont visibles dans un expander dédié sous la réponse.
-
----
-
-## 📄 Pipeline de données
-
-Le pipeline de traitement transforme les documents CNIL bruts en chunks vectorisés dans ChromaDB.
-
-### Étapes du pipeline
+### Étapes
 
 ```
 1. Scraping CNIL          → pages HTML brutes (1 829 documents)
@@ -319,25 +306,16 @@ Le pipeline de traitement transforme les documents CNIL bruts en chunks vectoris
 
 ### Chunking content-based
 
-Le chunker détecte et traite les tableaux **par contenu**, pas par extension de fichier :
+Le chunker détecte et traite les tableaux **par contenu**, pas par extension :
 
-| Format | Détection | Méthode | Documents concernés |
-|---|---|---|---|
-| **HTML** | Éléments `<table>` dans le DOM | `_convert_html_table()` | 39 documents |
-| **PDF** | `find_tables()` de PyMuPDF | `_extract_pdf_tables()` | 264 documents (54%) |
-| **DOCX** | `w:tbl` dans le DOM python-docx | `doc.tables` | 1 document |
-| **XLSX/ODS** | Toujours (spreadsheet natif) | `_chunk_spreadsheet()` | 27 documents |
+| Format | Détection | Documents |
+|---|---|---|
+| **HTML** | `<table>` dans le DOM | 39 documents |
+| **PDF** | `find_tables()` PyMuPDF | 264 documents (54%) |
+| **DOCX** | `w:tbl` python-docx | 1 document |
+| **XLSX/ODS** | Natif (spreadsheet) | 27 documents |
 
-Tous convergent vers **`_convert_table_rows()`** — un pipeline commun :
-1. Découpage en zones (heading + lignes de données)
-2. Split si zone > 500 mots
-3. Conversion en texte pipe-delimited
-4. Réécriture LLM (Mistral-Nemo) en texte naturel
-5. Fallback mécanique si le LLM échoue
-
-### Tags RGPD guidés
-
-Chaque chunk est taggé parmi **25 catégories RGPD normalisées** :
+### 25 catégories RGPD guidées
 
 ```
 droits des personnes, consentement, sécurité des données,
@@ -350,11 +328,10 @@ prospection commerciale, conformité RGPD, profilage,
 sanctions CNIL, données de santé, information des personnes
 ```
 
-Le prompt LLM guide le modèle vers ce vocabulaire contrôlé, éliminant les tags anarchiques (7 500 → ~25).
+</details>
 
----
-
-## 🛠️ Stack Technique
+<details>
+<summary><h2>🛠️ Stack technique</h2></summary>
 
 | Composant | Technologie | Détails |
 |---|---|---|
@@ -363,8 +340,7 @@ Le prompt LLM guide le modèle vers ce vocabulaire contrôlé, éliminant les ta
 | **VectorDB** | ChromaDB | PersistentClient, 16 919 chunks |
 | **Reranker** | Jina Reranker v2 | 278M params, multilingual, GPU |
 | **BM25** | rank_bm25 | Index sparse pour recherche hybride |
-| **Agent** | LangGraph 1.0 | Graphe 9 nœuds, query decomposition, génération structurée, 5 outils locaux |
-| **Intent** | Classification LLM | 7 intents, prompt structuré, JSON output |
+| **Agent** | LangGraph 1.0 | 9 nœuds, query decomposition, 5 outils locaux |
 | **Interface** | Streamlit multipage | Chat + Dashboard + Documents entreprise |
 | **Observabilité** | JSONL + Alerter | Logs structurés, feedback, alertes SMTP |
 | **GPU** | RTX 4070 Ti 12GB | LLM + embeddings en VRAM, reranker sur CPU |
@@ -373,70 +349,27 @@ Le prompt LLM guide le modèle vers ce vocabulaire contrôlé, éliminant les ta
 
 ```
 RAG-DPO/
-├── app.py                      # Point d'entrée Streamlit multipage
-├── update_cnil.py              # Mise à jour incrémentale base CNIL (~1x/mois)
-├── rebuild_pipeline.py         # Reconstruction du pipeline de données
-├── tag_all_chunks.py           # Tagging RGPD guidé (25 catégories)
-├── pages/
-│   ├── 1_💬_Chat.py            # Chat RAG interactif + feedback + toggle Agent/Natif
-│   ├── 2_📊_Dashboard.py       # Dashboard observabilité (métriques, alertes)
-│   ├── 3_📂_Documents.py       # Gestion documents entreprise
-│   └── 4_ℹ️_À_propos.py        # Crédits, architecture, liens
-├── test_rag.py                 # Test RAG en ligne de commande
-├── check_install.py            # Vérification de l'installation
-├── configs/
-│   ├── config.yaml             # Configuration centralisée (RAG + observabilité + SMTP)
-│   └── enterprise_tags.json    # Registre des tags entreprise (auto-généré)
+├── app.py                          # Point d'entrée Streamlit
+├── update_cnil.py                  # Mise à jour incrémentale CNIL
+├── rebuild_pipeline.py             # Reconstruction pipeline de données
+├── tag_all_chunks.py               # Tagging RGPD guidé (25 catégories)
+├── pages/                          # Pages Streamlit (Chat, Dashboard, Documents, À propos)
 ├── src/
-│   ├── rag/                    # 🧠 Cœur du système RAG
-│   │   ├── pipeline.py         # Orchestration (intent-aware, dual-gen)
-│   │   ├── intent_classifier.py # Classification 7 intents (Phase 0)
-│   │   ├── retriever.py        # Hybrid retrieval (BM25 + semantic + RRF)
-│   │   ├── query_expander.py   # Multi-query expansion via LLM
-│   │   ├── bm25_index.py       # Index BM25 (summaries + chunks)
-│   │   ├── reranker.py         # Cross-encoder Jina reranking + topic boost
-│   │   ├── context_builder.py  # Construction contexte + 7 prompts spécialisés
-│   │   ├── generator.py        # Génération LLM (Ollama)
-│   │   ├── validators.py       # Grounding + relevance validation
-│   │   └── agent/              # 🤖 Pipeline Agent LangGraph
-│   │       ├── graph.py        # Graphe LangGraph (9 nœuds, decompose + routing)
-│   │       ├── nodes.py        # Fonctions de nœuds (incl. fusion programmatique)
-│   │       ├── tools.py        # 5 outils locaux
-│   │       └── state.py        # RAGState TypedDict
-│   ├── processing/             # 📄 Pipeline de traitement des données
-│   │   ├── process_and_chunk.py        # Chunking sémantique + détection tableaux
-│   │   ├── create_chromadb_index.py    # Indexation vectorielle BGE-M3
-│   │   ├── generate_document_summaries.py  # Fiches synthétiques LLM
-│   │   ├── hybrid_filter.py            # Filtrage pertinence
-│   │   ├── classify_documents.py       # Classification par nature
-│   │   └── ingest_enterprise.py        # Ingestion docs entreprise
-│   ├── scraping/               # 🕷️ Scraping CNIL
-│   │   └── cnil_scraper_final.py
-│   └── utils/
-│       ├── llm_provider.py     # Interface Ollama
-│       ├── embedding_provider.py # Provider BGE-M3 (FP16, GPU, lazy load)
-│       ├── rgpd_topics.py      # 25 catégories RGPD + TopicMatcher + prompts
-│       ├── query_logger.py     # Logger JSONL queries + feedback
-│       ├── structured_logger.py # Logging JSON structuré
-│       ├── alerter.py          # Alertes seuils + SMTP
-│       └── acronyms.py         # Expansion acronymes RGPD
-├── eval/                       # 📊 Framework d'évaluation
-│   ├── qa_dataset.json         # 48 questions benchmark (5 cat. + 6 composites)
-│   ├── run_eval.py             # Évaluation 4 axes + multi-run (--runs N, --top-k K)
-│   └── results_*.json          # Résultats historiques
-├── logs/                       # 📝 Logs structurés (non versionné)
-├── data/                       # 📁 Données (non versionné)
-│   ├── raw/                    # Documents bruts CNIL
-│   ├── vectordb/chromadb/      # Base vectorielle ChromaDB
-│   └── metadata/               # Métadonnées documents
-└── tasks/                      # 📝 Notes de travail
-    ├── todo.md
-    └── lessons.md              # Leçons apprises (patterns, erreurs, fixes)
+│   ├── rag/                        # Cœur RAG (pipeline, retriever, reranker, generator…)
+│   │   └── agent/                  # Pipeline Agent LangGraph (9 nœuds, 5 outils)
+│   ├── processing/                 # Pipeline données (chunking, indexation, ingestion)
+│   ├── scraping/                   # Scraping CNIL
+│   └── utils/                      # Providers, logging, alerting
+├── eval/                           # Framework d'évaluation (48 questions, multi-run)
+├── configs/                        # Configuration centralisée (config.yaml)
+├── data/                           # Données (raw, vectordb, metadata)
+└── logs/                           # Logs structurés JSONL
 ```
 
----
+</details>
 
-## 🚀 Installation
+<details>
+<summary><h2>🚀 Installation</h2></summary>
 
 ### Prérequis
 
@@ -462,7 +395,7 @@ ollama pull mistral-nemo        # LLM 12B (7.1 GB)
 ollama pull llava:7b             # Vision — extraction texte images (4.7 GB)
 ```
 
-> **Note** : Les embeddings BGE-M3 (sentence-transformers) sont téléchargés automatiquement au premier lancement.
+> Les embeddings BGE-M3 sont téléchargés automatiquement au premier lancement.
 
 ### 3. Vérifier l'installation
 
@@ -472,17 +405,16 @@ python check_install.py
 
 ### 4. Construire la base de données (optionnel)
 
-Si vous partez de zéro avec vos propres données CNIL :
-
 ```bash
 python rebuild_pipeline.py              # Pipeline complet (scraping → indexation)
 python rebuild_pipeline.py --from 5b    # Reprendre depuis le chunking
-python rebuild_pipeline.py --fresh      # Forcer le retraitement de tous les docs
+python rebuild_pipeline.py --fresh      # Retraitement complet
 ```
 
----
+</details>
 
-## 💬 Utilisation
+<details>
+<summary><h2>💬 Utilisation</h2></summary>
 
 ### Interface Streamlit (recommandé)
 
@@ -490,22 +422,13 @@ python rebuild_pipeline.py --fresh      # Forcer le retraitement de tous les doc
 streamlit run app.py
 ```
 
-Ouvre l'application multipage dans le navigateur :
-
 | Page | Description |
 |---|---|
-| 🏠 **Accueil** | Vue d'ensemble du système, statistiques |
-| 💬 **Chat** | Interface Q&R RAG avec sources citées, feedback 👍/👎 et toggle Agent/Natif |
-| 📊 **Dashboard** | Métriques temps réel, alertes, feedback, export JSON |
+| 🏠 **Accueil** | Vue d'ensemble, statistiques |
+| 💬 **Chat** | Interface Q&R RAG avec sources, feedback 👍/👎, toggle Agent/Natif |
+| 📊 **Dashboard** | Métriques temps réel, alertes, export JSON |
 | 📂 **Documents** | Gestion des documents entreprise (import, liste, purge) |
-| ℹ️ **À propos** | Crédits, architecture technique, liens du projet |
-
-Fonctionnalités du chat :
-- **Toggle Agent / Natif** dans la sidebar (agent recommandé)
-- Filtrage par nature de document (Doctrine, Guide, Sanction, Technique)
-- Filtrage par tags entreprise (si docs internes importés)
-- Sources citées avec distinction [CNIL] / [Interne]
-- Feedback utilisateur 👍/👎 enregistré dans les logs
+| ℹ️ **À propos** | Crédits, architecture, liens |
 
 ### Ligne de commande
 
@@ -516,125 +439,57 @@ python test_rag.py "Quand une AIPD est-elle obligatoire ?"
 ### Évaluation
 
 ```bash
-# Multi-run recommandé (3 runs pour moyennage statistique)
-python eval/run_eval.py --agent --runs 3 --verbose
-
-# Run simple
-python eval/run_eval.py --verbose
-
-# Tester avec un top_k différent (défaut: 10)
-python eval/run_eval.py --agent --runs 3 --top-k 5
+python eval/run_eval.py --agent --runs 3 --verbose     # Multi-run (recommandé)
+python eval/run_eval.py --verbose                       # Run simple
+python eval/run_eval.py --agent --runs 3 --top-k 5      # Top-k différent
 ```
 
-Exécute le benchmark 48 questions (42 simples + 6 composites) en 2 phases :
-1. **Phase 1** : Génération RAG + scoring par mots-clés + similarité sémantique (BGE-M3 cosine)
-2. **Phase 2** : LLM-as-Judge — score libre 0-100 en JSON, utilisé directement (pas de discrétisation)
+</details>
 
-Score final = **55% Correctness** (60% LLM-Judge + 40% Semantic) + **25% Faithfulness** + **20% Sources**
+<details>
+<summary><h2>🔄 Maintenance CNIL & Pipeline Entreprise</h2></summary>
 
----
-
-## 🔄 Maintenance — Mise à jour de la base CNIL
-
-La base CNIL évolue régulièrement (nouvelles sanctions, guides, recommandations). Un script dédié permet la mise à jour incrémentale (~1x/mois) :
+### Mise à jour CNIL (~1x/mois)
 
 ```bash
-python update_cnil.py --status          # État actuel de la base
+python update_cnil.py --status          # État actuel
 python update_cnil.py                   # Mise à jour complète
 python update_cnil.py --dry-run         # Aperçu sans exécution
-python update_cnil.py --scrape-only     # Vérifier modifications côté CNIL
-python update_cnil.py --force-reindex   # Réindexation complète ChromaDB
+python update_cnil.py --force-reindex   # Réindexation complète
 ```
 
-Le scraping utilise des requêtes conditionnelles (`If-Modified-Since` → `304 Not Modified`) pour ne re-télécharger que les pages modifiées. Les étapes suivantes (classification, chunking, résumés, tagging) détectent automatiquement les documents déjà traités.
+### Documents entreprise
 
----
-
-## 📂 Pipeline Entreprise
-
-Permet aux DPO d'alimenter le RAG avec **leurs propres documents internes** (politiques, registres, contrats, PIA…) tout en conservant la base CNIL comme référentiel autoritaire.
+Permet d'alimenter le RAG avec des **documents internes** (politiques, registres, contrats, PIA…) tout en conservant la base CNIL comme référentiel autoritaire.
 
 ```bash
-# Importer un dossier de documents entreprise
 python -m src.processing.ingest_enterprise --input docs/ --tag politique_interne --recursive
-
-# Lister les documents entreprise indexés
 python -m src.processing.ingest_enterprise --list
-
-# Purger les documents entreprise (sans toucher à la base CNIL)
 python -m src.processing.ingest_enterprise --purge
 ```
 
-- **Formats supportés** : PDF, DOCX, XLSX, ODS, HTML, TXT
-- **Détection de tableaux** : automatique pour tous les formats (content-based)
-- **Déduplication** par hash SHA256 (relancer = pas de doublons)
-- **Tags** par document pour filtrage dans l'UI
-- **CNIL prévaut toujours** sur les docs entreprise dans les réponses
+- Formats : PDF, DOCX, XLSX, ODS, HTML, TXT
+- Déduplication SHA256 — CNIL prévaut toujours dans les réponses
 
----
+</details>
 
-## 📊 Observabilité
+<details>
+<summary><h2>📊 Observabilité & Configuration</h2></summary>
 
 | Composant | Description |
 |---|---|
-| **Logs structurés** | JSON dans `logs/app.jsonl` — chaque requête, erreur, timing |
-| **Query Logger** | `logs/queries.jsonl` — historique complet des questions + métriques |
-| **Feedback** | `logs/feedback.jsonl` — 👍/👎 utilisateur avec contexte |
-| **Alertes** | Seuils configurables (taux erreur, temps, satisfaction, citations) |
-| **SMTP** | Notifications email optionnelles (config dans `config.yaml`) |
-| **Dashboard** | Page Streamlit dédiée avec métriques temps réel et export |
+| **Logs structurés** | `logs/app.jsonl` — requêtes, erreurs, timings |
+| **Query Logger** | `logs/queries.jsonl` — historique complet |
+| **Feedback** | `logs/feedback.jsonl` — 👍/👎 avec contexte |
+| **Alertes** | Seuils configurables + notifications SMTP |
+| **Dashboard** | Page Streamlit dédiée avec export |
 
-### Configuration SMTP (optionnelle)
+Configuration centralisée dans `configs/config.yaml` — embeddings, RAG, observabilité, SMTP.
 
-```yaml
-# Dans configs/config.yaml
-observability:
-  alerting:
-    smtp:
-      enabled: true
-      host: "smtp.gmail.com"
-      port: 587
-      username: "mon-bot@gmail.com"
-      password: "xxxx-xxxx-xxxx-xxxx"  # App password
-      to_addrs:
-        - "dpo@entreprise.com"
-```
+</details>
 
----
-
-## 🔧 Configuration
-
-La configuration est centralisée dans `configs/config.yaml`. Paramètres clés :
-
-```yaml
-embeddings:
-  model: "BAAI/bge-m3"              # 1024 dims, multilingue, FP16 GPU
-  dims: 1024
-  device: "cuda"
-
-rag:
-  enable_hybrid: true               # BM25 + semantic
-  enable_query_expansion: true       # Multi-query LLM
-  enable_reranker: true              # Cross-encoder Jina
-  enable_summary_prefilter: true     # Pré-filtre par résumés
-  rerank_candidates: 40              # Candidats avant reranking
-  rerank_top_k: 10                   # Chunks après reranking
-  temperature: 0.0                   # Factuel strict
-
-observability:
-  logging:
-    level: INFO
-    structured_file: "app.jsonl"     # Logs JSON structurés
-  alerting:
-    enabled: true
-    thresholds:
-      error_rate_pct: 20.0
-      avg_response_time_s: 60.0
-```
-
----
-
-## 📈 Évolution du système
+<details>
+<summary><h2>📈 Évolution du système</h2></summary>
 
 | Version | Composant | Impact |
 |---|---|---|
@@ -642,44 +497,28 @@ observability:
 | v2 | Nomic embeddings + BM25 | +8% |
 | v3 | Query Expansion LLM | +3% (recall) |
 | v4 | Cross-Encoder Jina v2 | +3% (precision) |
-| v5 | Rechunking intelligent (overlap, heading, split sémantique) | +1% |
-| v6 | Intent Classification (7 intents, prompts spécialisés) | Prompts ciblés |
-| v6b | Agent LangGraph (8 nœuds, 5 outils) | +1.5% + robustesse |
-| v6c | Eval v5 → v6 (score libre JSON, 42 questions) | Thermomètre fiable |
-| v6d | Migration BGE-M3 (remplace nomic, 1024d) | Embeddings FR natifs |
-| **v7** | **Détection tableaux content-based + tags RGPD guidés** | **+0.5%** (89.2%¹ → 89.7%) |
-| **v8** | **Suppression discrétisation LLM-Judge (scoring brut v7)** | Scores réels (non gonflés) |
-| **v9** | **Query Decomposition + fusion programmatique** | Citations préservées sur questions composites |
-| **v10** | **Génération unique structurée + prompts DPO-centric** | 90.4% — single retrieval+gen, ×3 plus rapide, 11 catégories, 48 questions |
-
-### Scoring (eval v3 → v7)
-
-Les scores ne sont **pas directement comparables** entre générations d'évaluation :
-
-| | Eval v3 (v1–v5) | Eval v4 (v6–v6b) | Eval v6 (v6c–v7) | Eval v7 (v8+) |
-|---|---|---|---|---|
-| Score final | 70% LLM-Judge + 30% Keywords | 55% Correctness + 25% Faithfulness + 20% Sources | Idem v4 | Idem v4 |
-| LLM-Judge | Score libre 0-100 (texte) | Score libre 0-100 (texte) | Score libre 0-100 (JSON, discrétisé) | **Score brut 0-100 (JSON, sans discrétisation)** |
-| Dataset | 18 questions | 18 questions | **42 questions** (5 catégories) | **48 questions** (11 catégories) |
-| Multi-run | Non | Oui (3 runs) | Oui (3 runs) | Oui (3 runs) |
-| Calibration | — | — | Discrétisé → scores gonflés ~+2.4 pts | **Scores bruts, non gonflés** |
-
-### Gains par composant
+| v5 | Rechunking intelligent | +1% |
+| v6 | Intent Classification (7 intents) | Prompts ciblés |
+| v6b | Agent LangGraph (8 nœuds) | +1.5% |
+| v6d | Migration BGE-M3 (1024d) | Embeddings FR natifs |
+| **v7** | **Tables content-based + tags RGPD** | **+0.5%** |
+| **v8** | **Scoring brut (sans discrétisation)** | Scores réels |
+| **v9** | **Query Decomposition** | Citations préservées |
+| **v10** | **Génération structurée + prompts DPO** | **90.4%** |
 
 ```
-Semantic seul                   70% ─────────────────────┐
-+ BM25 hybride                  78%  (+8%)               │ Retrieval
-+ Query Expansion LLM           81%  (+3%)               │ augmenté
-+ Cross-Encoder Reranking       84%  (+3%)               │
-+ Rechunking intelligent        85%  (+1%)  ─────────────┘
-+ Intent Classification         86%  (prompts ciblés)      → Précision
-+ Agent LangGraph               89%  (+1.5%)               → Outils + contrôle
-+ Tables content-based          89.7% (+0.5%)¹            → Données complètes
-+ Query Decomposition           —     (qualité composites) → Citations préservées
-+ Single Gen + prompts DPO      90.4% (+0.7%)              → Réponses détaillées
-¹ Le gain réel du chunking est ~+2.9% mais masqué par la suppression
-  de la discrétisation qui gonflait les scores précédents de ~2.4 pts.
+Semantic seul                   70%
++ BM25 hybride                  78%  (+8%)
++ Query Expansion LLM           81%  (+3%)
++ Cross-Encoder Reranking       84%  (+3%)
++ Rechunking intelligent        85%  (+1%)
++ Intent Classification         86%
++ Agent LangGraph               89%  (+1.5%)
++ Tables content-based          89.7%
++ Single Gen + prompts DPO      90.4%
 ```
+
+</details>
 
 ---
 
@@ -689,8 +528,8 @@ Ce projet est un outil éducatif et de recherche. Les données CNIL utilisées s
 
 ## 🙏 Remerciements
 
-- **CNIL** pour la mise à disposition des ressources sur la protection des données
-- **Ollama** pour l'inférence locale simplifiée
-- **Jina AI** pour le reranker multilingue open-source
-- **Mistral AI** pour Mistral-Nemo 12B
-- **BAAI** pour BGE-M3 (embeddings multilingues)
+- **CNIL** — ressources publiques sur la protection des données
+- **Ollama** — inférence locale simplifiée
+- **Jina AI** — reranker multilingue open-source
+- **Mistral AI** — Mistral-Nemo 12B
+- **BAAI** — BGE-M3 (embeddings multilingues)

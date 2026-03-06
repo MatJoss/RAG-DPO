@@ -1,5 +1,7 @@
 # RAG-DPO
 
+🇬🇧 [English version](README.en.md)
+
 **Assistant IA local open source pour le RGPD et les Data Protection Officers**
 
 RAG-DPO est un assistant Retrieval-Augmented Generation conçu pour répondre aux questions liées au RGPD et à la protection des données personnelles, en s'appuyant sur une architecture entièrement locale et open source.

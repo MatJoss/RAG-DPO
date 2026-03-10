@@ -373,13 +373,31 @@ RAG-DPO/
 <details>
 <summary><h2>🚀 Installation</h2></summary>
 
-### Prerequisites
+### Option A — Docker (recommended)
+
+```bash
+# Pull the image from GitHub Container Registry
+docker pull ghcr.io/matjoss/rag-dpo:latest
+
+# Launch the full stack (app + Ollama)
+git clone https://github.com/MatJoss/RAG-DPO.git && cd RAG-DPO
+docker compose up -d
+
+# With GPU for embeddings + reranker:
+docker compose -f docker-compose.yml -f docker-compose.gpu.yml up -d
+```
+
+> 📖 Detailed Docker guide: [`docs/DOCKER_HOWTO.md`](docs/DOCKER_HOWTO.md)
+
+### Option B — Local installation
+
+#### Prerequisites
 
 - **Python 3.11+**
 - **NVIDIA GPU** with ≥8 GB VRAM (RTX 3070+ recommended)
 - **Ollama** installed and running
 
-### 1. Clone and install
+#### 1. Clone and install
 
 ```bash
 git clone https://github.com/MatJoss/RAG-DPO.git
@@ -390,7 +408,7 @@ venv\Scripts\activate        # Windows
 pip install -r requirements.txt
 ```
 
-### 2. Install Ollama models
+#### 2. Install Ollama models
 
 ```bash
 ollama pull mistral-nemo        # LLM 12B (7.1 GB)
@@ -399,13 +417,13 @@ ollama pull llava:7b             # Vision — image text extraction (4.7 GB)
 
 > BGE-M3 embeddings are downloaded automatically on first run.
 
-### 3. Verify installation
+#### 3. Verify installation
 
 ```bash
 python check_install.py
 ```
 
-### 4. Build the database (optional)
+#### 4. Build the database (optional)
 
 ```bash
 python rebuild_pipeline.py              # Full pipeline (scraping → indexing)
